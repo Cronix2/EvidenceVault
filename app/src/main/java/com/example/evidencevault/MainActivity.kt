@@ -1,47 +1,59 @@
 package com.example.evidencevault
 
+import android.Manifest
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.tooling.preview.Preview
-import com.example.evidencevault.ui.theme.EvidenceVaultTheme
+import android.widget.Button
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+import com.example.evidencevault.recording.RecordingService
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
+
+    private val requestMicPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startRecordingService()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
-        setContent {
-            EvidenceVaultTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Greeting(
-                        name = "Android",
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+        setContentView(R.layout.activity_main)
+
+        findViewById<Button>(R.id.btnStart).setOnClickListener {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+            } else {
+                startRecordingService()
             }
         }
+
+        findViewById<Button>(R.id.btnStop).setOnClickListener {
+            val i = Intent(this, RecordingService::class.java).apply {
+                action = RecordingService.ACTION_STOP
+            }
+            startService(i)
+        }
+
+        findViewById<Button>(R.id.btnVault).setOnClickListener {
+            startActivity(Intent(this, VaultActivity::class.java))
+        }
     }
-}
 
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    EvidenceVaultTheme {
-        Greeting("Android")
+    private fun startRecordingService() {
+        val i = Intent(this, RecordingService::class.java).apply {
+            action = RecordingService.ACTION_START
+        }
+        // startForegroundService requis Android O+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(i)
+        } else {
+            startService(i)
+        }
     }
 }
