@@ -4,17 +4,20 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.example.evidencevault.domain.Evidence
+import com.example.evidencevault.domain.IntegrityStatus
 
 class EvidenceAdapter(
     private val onPlayClick: (Evidence, EvidenceViewHolder) -> Unit,
     private val onPauseClick: (Evidence) -> Unit,
     private val onSeekBarChange: (Int) -> Unit,
-    private val onRenameClick: (Evidence) -> Unit
+    private val onRenameClick: (Evidence) -> Unit,
+    private val onIntegrityClick: (Evidence) -> Unit
 ) : RecyclerView.Adapter<EvidenceAdapter.EvidenceViewHolder>() {
 
     private var evidences: List<Evidence> = emptyList()
@@ -30,6 +33,7 @@ class EvidenceAdapter(
         val itemSeekBar: SeekBar = itemView.findViewById(R.id.itemSeekBar)
         val itemCurrentTime: TextView = itemView.findViewById(R.id.itemCurrentTime)
         val itemTotalTime: TextView = itemView.findViewById(R.id.itemTotalTime)
+        val imgIntegrity: ImageView = itemView.findViewById(R.id.imgIntegrity)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): EvidenceViewHolder {
@@ -49,6 +53,14 @@ class EvidenceAdapter(
 
         holder.playerControls.visibility = if (isExpanded) View.VISIBLE else View.GONE
         holder.itemPlayIcon.setImageResource(if (isExpanded && isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
+
+        holder.imgIntegrity.setImageResource(
+            when (evidence.integrity) {
+                IntegrityStatus.OK -> R.drawable.ic_integrity_ok
+                IntegrityStatus.MODIFIED -> R.drawable.ic_integrity_warn
+                IntegrityStatus.UNVERIFIED -> R.drawable.ic_integrity_unknown
+            }
+        )
 
         holder.itemView.setOnClickListener {
             val previouslyExpandedPosition = expandedPosition
@@ -72,6 +84,10 @@ class EvidenceAdapter(
         holder.itemView.setOnLongClickListener {
             onRenameClick(evidence)
             true
+        }
+
+        holder.imgIntegrity.setOnClickListener { 
+            onIntegrityClick(evidence)
         }
 
         holder.itemSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {

@@ -1,6 +1,7 @@
 package com.example.evidencevault
 
 import android.media.MediaPlayer
+import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -9,14 +10,18 @@ import android.text.TextWatcher
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.evidencevault.crypto.CryptoVault
+import com.example.evidencevault.crypto.HashUtils
 import com.example.evidencevault.domain.Evidence
+import com.example.evidencevault.domain.IntegrityStatus
 import com.example.evidencevault.storage.EvidenceIndex
+import com.example.evidencevault.storage.ExportUtils
 import com.example.evidencevault.storage.IntegrityManifestRepo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -40,6 +45,11 @@ class VaultActivity : AppCompatActivity() {
     private var tempPlaybackFile: File? = null
     private val uiHandler = Handler(Looper.getMainLooper())
 
+    private val createZipLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            if (uri != null) exportTo(uri)
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_vault)
@@ -52,11 +62,13 @@ class VaultActivity : AppCompatActivity() {
             onPlayClick = { evidence, holder -> playEvidence(evidence, holder) },
             onPauseClick = { pausePlayback() },
             onSeekBarChange = { progress -> mediaPlayer?.seekTo(progress) },
-            onRenameClick = { showRenameDialog(it) }
+            onRenameClick = { showRenameDialog(it) },
+            onIntegrityClick = { showIntegrityToast(it.integrity) }
         )
         recyclerEvidence.adapter = evidenceAdapter
 
         findViewById<ImageButton>(R.id.btnRecord).setOnClickListener { finish() }
+        findViewById<ImageButton>(R.id.btnExport).setOnClickListener { askExport() }
 
         searchBar.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
@@ -65,12 +77,6 @@ class VaultActivity : AppCompatActivity() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
-        
-        // Lancer la vérification de l'intégrité au démarrage
-        lifecycleScope.launch {
-            val result = IntegrityManifestRepo.verify(this@VaultActivity)
-            showIntegrityStatus(result)
-        }
     }
 
     private fun filterList(query: String) {
@@ -93,24 +99,37 @@ class VaultActivity : AppCompatActivity() {
 
     private fun loadList() {
         lifecycleScope.launch {
-            val (evidenceList, loadedTitles) = withContext(Dispatchers.IO) {
-                val titles = EvidenceIndex.loadTitles(this@VaultActivity)
+            val evidenceList = withContext(Dispatchers.IO) {
+                val loadedTitles = EvidenceIndex.loadTitles(this@VaultActivity)
+                val snap = IntegrityManifestRepo.snapshot(this@VaultActivity)
+
                 val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
                 val files = vaultDir.listFiles()
                     ?.filter { it.isFile && it.name.endsWith(".enc") && it.name != "index.json.enc" && it.name != "manifest.json.enc" }
                     ?.sortedByDescending { it.lastModified() }
                     ?: emptyList()
 
-                val evidences = files.map { f ->
-                    val baseTitle = titles[f.name].takeUnless { it.isNullOrBlank() } ?: f.name
+                files.map { f ->
+                    val status = if (!snap.chainOk) {
+                        IntegrityStatus.UNVERIFIED
+                    } else {
+                        val expectedHash = snap.expectedHashes[f.name]
+                        if (expectedHash == null) {
+                            IntegrityStatus.UNVERIFIED
+                        } else {
+                            val actualHash = HashUtils.sha256File(f)
+                            if (actualHash == expectedHash) IntegrityStatus.OK else IntegrityStatus.MODIFIED
+                        }
+                    }
+
+                    val baseTitle = loadedTitles[f.name].takeUnless { it.isNullOrBlank() } ?: f.name
                     val dateText = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date(f.lastModified()))
                     val durationSec = extractDurationFromName(f.name)
-                    Evidence(f, baseTitle, dateText, formatMMSS(durationSec))
+                    Evidence(f, baseTitle, dateText, formatMMSS(durationSec), status)
                 }
-                Pair(evidences, titles)
             }
             allEvidences = evidenceList
-            this@VaultActivity.titles = loadedTitles
+            this@VaultActivity.titles = allEvidences.associate { it.file.name to it.title }.toMutableMap()
             evidenceAdapter.updateEvidences(evidenceList)
             if (evidenceList.isEmpty()) {
                 Toast.makeText(this@VaultActivity, "Aucun enregistrement", Toast.LENGTH_SHORT).show()
@@ -119,7 +138,7 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun playEvidence(evidence: Evidence, holder: EvidenceAdapter.EvidenceViewHolder) {
-        cleanupMediaPlayer()
+        cleanupMediaPlayer() 
 
         lifecycleScope.launch {
             val tempFile = withContext(Dispatchers.IO) {
@@ -208,22 +227,31 @@ class VaultActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun showIntegrityStatus(result: IntegrityManifestRepo.VerificationResult) {
-        val msg = when (result) {
-            is IntegrityManifestRepo.VerificationResult.Ok ->
-                "Intégrité OK (${result.totalEntries} preuves)"
-            IntegrityManifestRepo.VerificationResult.NoManifest ->
-                "Pas de manifeste (aucune preuve validée)"
-            IntegrityManifestRepo.VerificationResult.ManifestCorrupted ->
-                "Manifeste corrompu"
-            is IntegrityManifestRepo.VerificationResult.BrokenChain ->
-                "Chaîne cassée (entrée ${result.index})"
-            is IntegrityManifestRepo.VerificationResult.EntryHashMismatch ->
-                "Hash entrée invalide (entrée ${result.index})"
-            is IntegrityManifestRepo.VerificationResult.MissingEvidenceFile ->
-                "Preuve manquante: ${result.filename}"
-            is IntegrityManifestRepo.VerificationResult.FileHashMismatch ->
-                "Preuve modifiée: ${result.filename}"
+    private fun askExport() {
+        val name = "EvidenceVault_bundle_${System.currentTimeMillis()}.zip"
+        createZipLauncher.launch(name)
+    }
+
+    private fun exportTo(uri: Uri) {
+        lifecycleScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    val evidenceDir = File(filesDir, "evidence").apply { mkdirs() }
+                    val filesToExport = allEvidences.map { it.file } 
+                    ExportUtils.exportZip(contentResolver, uri, evidenceDir, filesToExport)
+                }
+                Toast.makeText(this@VaultActivity, "Export terminé", Toast.LENGTH_LONG).show()
+            } catch (t: Throwable) {
+                Toast.makeText(this@VaultActivity, "Export échoué: ${t.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+    
+    private fun showIntegrityToast(status: IntegrityStatus) {
+        val msg = when (status) {
+            IntegrityStatus.OK -> "Intégrité du fichier : OK"
+            IntegrityStatus.MODIFIED -> "ATTENTION : Ce fichier a été modifié !"
+            IntegrityStatus.UNVERIFIED -> "Ce fichier n\'est pas suivi par le manifeste d\'intégrité."
         }
         Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     }

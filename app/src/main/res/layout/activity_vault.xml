@@ -13,6 +13,15 @@
         android:textStyle="bold"
         android:textColor="@android:color/white"/>
 
+    <ImageButton
+        android:id="@+id/btnExport"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_alignParentEnd="true"
+        android:background="@android:color/transparent"
+        android:src="@drawable/ic_export"
+        android:tint="@android:color/white" />
+
     <EditText
         android:id="@+id/searchBar"
         android:layout_width="match_parent"

@@ -21,9 +21,50 @@ object IntegrityManifestRepo {
     private fun manifestEncFile(context: Context): File =
         File(evidenceDir(context), MANIFEST_FILE_NAME)
 
-    /**
-     * Append-only: ajoute une entrée correspondant à un fichier .enc déjà écrit.
-     */
+    data class ManifestSnapshot(
+        val chainOk: Boolean,
+        val expectedHashes: Map<String, String>,
+        val totalEntries: Int
+    )
+
+    suspend fun snapshot(context: Context): ManifestSnapshot = withContext(Dispatchers.IO) {
+        val enc = manifestEncFile(context)
+        if (!enc.exists()) return@withContext ManifestSnapshot(
+            chainOk = false,
+            expectedHashes = emptyMap(),
+            totalEntries = 0
+        )
+
+        val manifest = loadManifestPlain(context)
+        val entries = manifest.getJSONArray("entries")
+
+        val map = HashMap<String, String>(entries.length())
+        var expectedPrev = GENESIS_PREV
+        var chainOk = true
+
+        for (i in 0 until entries.length()) {
+            val e = entries.getJSONObject(i)
+            val filename = e.getString("filename")
+            val fileHash = e.getString("file_hash")
+            val prev = e.getString("prev_entry_hash")
+            val entryHash = e.getString("entry_hash")
+
+            map[filename] = fileHash
+
+            if (prev != expectedPrev) chainOk = false
+            val recomputedEntryHash = HashUtils.sha256String("$filename|$fileHash|$prev")
+            if (recomputedEntryHash != entryHash) chainOk = false
+
+            expectedPrev = entryHash
+        }
+
+        ManifestSnapshot(
+            chainOk = chainOk,
+            expectedHashes = map,
+            totalEntries = entries.length()
+        )
+    }
+    
     suspend fun appendForEvidenceFile(context: Context, evidenceEncFile: File) = withContext(Dispatchers.IO) {
         require(evidenceEncFile.exists()) { "Evidence file does not exist" }
         require(evidenceEncFile.name.endsWith(".enc")) { "Evidence file must be .enc" }
@@ -52,12 +93,6 @@ object IntegrityManifestRepo {
         saveManifestPlainEncrypted(context, manifest)
     }
 
-    /**
-     * Vérifie:
-     * 1) Chaîne de hash intacte
-     * 2) Chaque fichier listé existe encore
-     * 3) Hash de chaque fichier correspond
-     */
     suspend fun verify(context: Context): VerificationResult = withContext(Dispatchers.IO) {
         val manifestEnc = manifestEncFile(context)
         if (!manifestEnc.exists()) return@withContext VerificationResult.NoManifest
@@ -75,7 +110,6 @@ object IntegrityManifestRepo {
             val prev = e.getString("prev_entry_hash")
             val entryHash = e.getString("entry_hash")
 
-            // Vérif chaînage
             if (prev != expectedPrev) {
                 return@withContext VerificationResult.BrokenChain(index = i)
             }
@@ -85,7 +119,6 @@ object IntegrityManifestRepo {
                 return@withContext VerificationResult.EntryHashMismatch(index = i)
             }
 
-            // Vérif existence + hash fichier
             val f = File(evidenceDir(context), filename)
             if (!f.exists()) {
                 return@withContext VerificationResult.MissingEvidenceFile(filename = filename)
@@ -99,7 +132,6 @@ object IntegrityManifestRepo {
             expectedPrev = entryHash
         }
 
-        // Vérif last_entry_hash
         val last = manifest.optString("last_entry_hash", GENESIS_PREV)
         if (entries.length() == 0 && last != GENESIS_PREV) {
             return@withContext VerificationResult.ManifestCorrupted
@@ -111,8 +143,6 @@ object IntegrityManifestRepo {
 
         VerificationResult.Ok(totalEntries = entries.length())
     }
-
-    // ----------------- internes (plain JSON <-> chiffré) -----------------
 
     private fun loadManifestPlain(context: Context): JSONObject {
         val enc = manifestEncFile(context)

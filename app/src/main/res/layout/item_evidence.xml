@@ -64,6 +64,14 @@
                 android:src="@drawable/ic_play_arrow"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:tint="@android:color/white"/>
+
+            <ImageView
+                android:id="@+id/imgIntegrity"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_marginStart="8dp"
+                android:src="@drawable/ic_integrity_unknown"
+                android:contentDescription="integrity" />
         </LinearLayout>
 
     </RelativeLayout>
