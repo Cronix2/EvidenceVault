@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.evidencevault.crypto.CryptoVault
 import com.example.evidencevault.domain.Evidence
 import com.example.evidencevault.storage.EvidenceIndex
+import com.example.evidencevault.storage.IntegrityManifestRepo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -64,6 +65,12 @@ class VaultActivity : AppCompatActivity() {
             }
             override fun afterTextChanged(s: Editable?) {}
         })
+        
+        // Lancer la vérification de l'intégrité au démarrage
+        lifecycleScope.launch {
+            val result = IntegrityManifestRepo.verify(this@VaultActivity)
+            showIntegrityStatus(result)
+        }
     }
 
     private fun filterList(query: String) {
@@ -90,7 +97,7 @@ class VaultActivity : AppCompatActivity() {
                 val titles = EvidenceIndex.loadTitles(this@VaultActivity)
                 val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
                 val files = vaultDir.listFiles()
-                    ?.filter { it.isFile && it.name.endsWith(".enc") && it.name != "index.json.enc" }
+                    ?.filter { it.isFile && it.name.endsWith(".enc") && it.name != "index.json.enc" && it.name != "manifest.json.enc" }
                     ?.sortedByDescending { it.lastModified() }
                     ?: emptyList()
 
@@ -199,6 +206,26 @@ class VaultActivity : AppCompatActivity() {
             }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    private fun showIntegrityStatus(result: IntegrityManifestRepo.VerificationResult) {
+        val msg = when (result) {
+            is IntegrityManifestRepo.VerificationResult.Ok ->
+                "Intégrité OK (${result.totalEntries} preuves)"
+            IntegrityManifestRepo.VerificationResult.NoManifest ->
+                "Pas de manifeste (aucune preuve validée)"
+            IntegrityManifestRepo.VerificationResult.ManifestCorrupted ->
+                "Manifeste corrompu"
+            is IntegrityManifestRepo.VerificationResult.BrokenChain ->
+                "Chaîne cassée (entrée ${result.index})"
+            is IntegrityManifestRepo.VerificationResult.EntryHashMismatch ->
+                "Hash entrée invalide (entrée ${result.index})"
+            is IntegrityManifestRepo.VerificationResult.MissingEvidenceFile ->
+                "Preuve manquante: ${result.filename}"
+            is IntegrityManifestRepo.VerificationResult.FileHashMismatch ->
+                "Preuve modifiée: ${result.filename}"
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
     }
 
     private fun extractDurationFromName(name: String): Long {

@@ -5,6 +5,10 @@ import android.content.Intent
 import android.media.MediaMetadataRetriever
 import android.os.IBinder
 import com.example.evidencevault.crypto.CryptoVault
+import com.example.evidencevault.storage.IntegrityManifestRepo
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -39,12 +43,10 @@ class RecordingService : Service() {
     }
 
     private fun stopRecording() {
-        // On retire la notification immédiatement pour la réactivité de l'interface
         stopForeground(STOP_FOREGROUND_REMOVE)
 
-        // On exécute TOUTES les opérations lourdes dans un thread séparé
         Thread {
-            val tmp = recorder.stop() // Opération potentiellement longue
+            val tmp = recorder.stop()
 
             if (tmp != null && tmp.exists()) {
                 val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
@@ -64,9 +66,13 @@ class RecordingService : Service() {
 
                 CryptoVault.encryptFileTo(tmp, out)
                 tmp.delete()
+
+                // Append manifeste en arrière-plan
+                CoroutineScope(Dispatchers.IO).launch {
+                    IntegrityManifestRepo.appendForEvidenceFile(this@RecordingService, out)
+                }
             }
 
-            // Une fois que tout le travail en arrière-plan est terminé, on arrête le service.
             stopSelf()
         }.start()
     }
