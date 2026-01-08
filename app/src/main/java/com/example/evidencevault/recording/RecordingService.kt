@@ -2,8 +2,8 @@ package com.example.evidencevault.recording
 
 import android.app.Service
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.os.IBinder
-import android.util.Log
 import com.example.evidencevault.crypto.CryptoVault
 import java.io.File
 import java.text.SimpleDateFormat
@@ -15,26 +15,14 @@ class RecordingService : Service() {
     companion object {
         const val ACTION_START = "EV_START"
         const val ACTION_STOP = "EV_STOP"
-        private const val TAG = "RecordingService"
     }
 
     private val recorder = AudioRecorder()
 
-    override fun onCreate() {
-        super.onCreate()
-        NotificationUtils.ensureChannel(this)
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        try {
-            when (intent?.action) {
-                ACTION_START -> startRecording()
-                ACTION_STOP -> stopRecording()
-                else -> Log.w(TAG, "Unknown action: ${intent?.action}")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Service crash", e)
-            stopSelf()
+        when (intent?.action) {
+            ACTION_START -> startRecording()
+            ACTION_STOP -> stopRecording()
         }
         return START_NOT_STICKY
     }
@@ -42,33 +30,45 @@ class RecordingService : Service() {
     private fun startRecording() {
         if (recorder.isRecording()) return
 
-        // IMPORTANT: must be first
-        startForeground(
-            NotificationUtils.NOTIF_ID,
-            NotificationUtils.buildRecordingNotification(this)
-        )
+        NotificationUtils.ensureChannel(this)
+        startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this))
 
         val tempDir = File(cacheDir, "temp").apply { mkdirs() }
         val tmp = File(tempDir, "audio_tmp.m4a")
-
-        Log.i(TAG, "Start recording: ${tmp.absolutePath}")
         recorder.start(tmp)
     }
 
     private fun stopRecording() {
-        val tmp = recorder.stop()
-        if (tmp != null && tmp.exists()) {
-            val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
-            val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val out = File(vaultDir, "audio_$stamp.m4a.enc")
-
-            Log.i(TAG, "Encrypt -> ${out.absolutePath}")
-            CryptoVault.encryptFileTo(tmp, out)
-            tmp.delete()
-        }
-
+        // On retire la notification immédiatement pour la réactivité de l'interface
         stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+
+        // On exécute TOUTES les opérations lourdes dans un thread séparé
+        Thread {
+            val tmp = recorder.stop() // Opération potentiellement longue
+
+            if (tmp != null && tmp.exists()) {
+                val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
+
+                val durationSec = try {
+                    val mmr = MediaMetadataRetriever()
+                    mmr.setDataSource(tmp.absolutePath)
+                    val ms = mmr.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+                    mmr.release()
+                    (ms / 1000L).coerceAtLeast(0L)
+                } catch (_: Exception) {
+                    0L
+                }
+
+                val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val out = File(vaultDir, "audio_${stamp}_d${durationSec}s.m4a.enc")
+
+                CryptoVault.encryptFileTo(tmp, out)
+                tmp.delete()
+            }
+
+            // Une fois que tout le travail en arrière-plan est terminé, on arrête le service.
+            stopSelf()
+        }.start()
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
