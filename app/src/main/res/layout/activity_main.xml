@@ -1,37 +1,104 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0E0E0E"
-    android:padding="24dp">
+    android:background="#0E0E0E">
 
-    <!-- Icônes top -->
-    <ImageButton
-        android:id="@+id/btnSettings"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_alignParentStart="true"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_settings"
-        android:tint="@android:color/white" />
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
 
-    <ImageButton
-        android:id="@+id/btnVault"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_alignParentEnd="true"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_folder"
-        android:tint="@android:color/white" />
+    <!-- Top actions -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="top"
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:gravity="center_vertical">
 
-    <!-- Bouton record -->
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_settings"
+            android:tint="@android:color/white" />
+
+        <View
+            android:layout_width="0dp"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <ImageButton
+            android:id="@+id/btnVault"
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@android:color/transparent"
+            android:src="@drawable/ic_folder"
+            android:tint="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Center controls -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center_vertical|end"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#80000000">
+
+        <Switch
+            android:id="@+id/switchVideo"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Vidéo"
+            android:checked="true"
+            android:textColor="@android:color/white" />
+
+        <Switch
+            android:id="@+id/switchMic"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Mic"
+            android:checked="true"
+            android:textColor="@android:color/white" />
+    </LinearLayout>
+
+    <!-- Preview selectors -->
+    <LinearLayout
+        android:id="@+id/previewControls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="start|center_vertical"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <Button
+            android:id="@+id/btnBackPreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="back\npreview" />
+
+        <Button
+            android:id="@+id/btnFrontPreview"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="front\npreview" />
+    </LinearLayout>
+
+    <!-- Record button -->
     <ImageButton
         android:id="@+id/btnRecord"
-        android:layout_width="96dp"
-        android:layout_height="96dp"
-        android:layout_centerInParent="true"
+        android:layout_width="88dp"
+        android:layout_height="88dp"
+        android:layout_gravity="bottom|center_horizontal"
+        android:layout_marginBottom="30dp"
         android:background="@drawable/bg_record_button"
         android:src="@drawable/ic_record"
         android:tint="@android:color/white" />
 
-</RelativeLayout>
+</FrameLayout>

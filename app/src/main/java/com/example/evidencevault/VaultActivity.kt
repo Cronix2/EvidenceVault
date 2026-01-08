@@ -99,8 +99,8 @@ class VaultActivity : AppCompatActivity() {
 
     private fun loadList() {
         lifecycleScope.launch {
-            val evidenceList = withContext(Dispatchers.IO) {
-                val loadedTitles = EvidenceIndex.loadTitles(this@VaultActivity)
+            val (evidenceList, loadedTitles) = withContext(Dispatchers.IO) {
+                val titlesMap = EvidenceIndex.loadTitles(this@VaultActivity)
                 val snap = IntegrityManifestRepo.snapshot(this@VaultActivity)
 
                 val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
@@ -109,7 +109,7 @@ class VaultActivity : AppCompatActivity() {
                     ?.sortedByDescending { it.lastModified() }
                     ?: emptyList()
 
-                files.map { f ->
+                val evidences = files.map { f ->
                     val status = if (!snap.chainOk) {
                         IntegrityStatus.UNVERIFIED
                     } else {
@@ -122,14 +122,15 @@ class VaultActivity : AppCompatActivity() {
                         }
                     }
 
-                    val baseTitle = loadedTitles[f.name].takeUnless { it.isNullOrBlank() } ?: f.name
-                    val dateText = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date(f.lastModified()))
+                    val baseTitle = titlesMap[f.name].takeUnless { it.isNullOrBlank() } ?: f.name
+                    val dateText = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale.FRANCE).format(Date(f.lastModified()))
                     val durationSec = extractDurationFromName(f.name)
                     Evidence(f, baseTitle, dateText, formatMMSS(durationSec), status)
                 }
+                Pair(evidences, titlesMap)
             }
             allEvidences = evidenceList
-            this@VaultActivity.titles = allEvidences.associate { it.file.name to it.title }.toMutableMap()
+            this@VaultActivity.titles = loadedTitles.toMutableMap()
             evidenceAdapter.updateEvidences(evidenceList)
             if (evidenceList.isEmpty()) {
                 Toast.makeText(this@VaultActivity, "Aucun enregistrement", Toast.LENGTH_SHORT).show()
@@ -209,7 +210,7 @@ class VaultActivity : AppCompatActivity() {
             .setPositiveButton("OK") { _, _ ->
                 val newTitle = input.text?.toString()?.trim().orEmpty()
 
-                lifecycleScope.launch(Dispatchers.IO) { // Sauvegarde en arrière-plan
+                lifecycleScope.launch(Dispatchers.IO) { 
                     val currentTitles = titles.toMutableMap()
                     if (newTitle.isNotBlank()) {
                         currentTitles[ev.file.name] = newTitle
@@ -218,7 +219,7 @@ class VaultActivity : AppCompatActivity() {
                     }
                     EvidenceIndex.saveTitles(this@VaultActivity, currentTitles)
 
-                    withContext(Dispatchers.Main) { // Rechargement sur le thread UI
+                    withContext(Dispatchers.Main) { 
                         loadList()
                     }
                 }

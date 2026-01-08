@@ -36,14 +36,24 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.core.ktx)
     implementation("androidx.activity:activity-ktx:1.9.2")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.recyclerview:recyclerview:1.3.2")
     implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.0") // Ajouté pour les coroutines
+    implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.0")
+    
+    // CameraX
+    implementation("androidx.camera:camera-core:1.3.4")
+    implementation("androidx.camera:camera-camera2:1.3.4")
+    implementation("androidx.camera:camera-lifecycle:1.3.4")
+    implementation("androidx.camera:camera-video:1.3.4")
+    implementation("androidx.camera:camera-view:1.3.4")
+
+    // Service avec LifecycleOwner
+    implementation("androidx.lifecycle:lifecycle-service:2.8.4")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
