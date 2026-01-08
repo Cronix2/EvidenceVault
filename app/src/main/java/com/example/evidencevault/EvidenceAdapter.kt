@@ -12,21 +12,24 @@ import com.example.evidencevault.domain.Evidence
 
 class EvidenceAdapter(
     private val onPlayClick: (Evidence, EvidenceViewHolder) -> Unit,
-    private val onSeekBarChange: (Evidence, Int) -> Unit,
+    private val onPauseClick: (Evidence) -> Unit,
+    private val onSeekBarChange: (Int) -> Unit,
     private val onRenameClick: (Evidence) -> Unit
 ) : RecyclerView.Adapter<EvidenceAdapter.EvidenceViewHolder>() {
 
     private var evidences: List<Evidence> = emptyList()
-    private var currentlyPlaying: Evidence? = null
+    private var expandedPosition = -1
+    private var isPlaying = false
 
     class EvidenceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val itemTitle: TextView = itemView.findViewById(R.id.itemTitle)
         val itemDate: TextView = itemView.findViewById(R.id.itemDate)
         val itemDuration: TextView = itemView.findViewById(R.id.itemDuration)
+        val itemPlayIcon: ImageButton = itemView.findViewById(R.id.itemPlayIcon)
         val playerControls: LinearLayout = itemView.findViewById(R.id.playerControls)
         val itemSeekBar: SeekBar = itemView.findViewById(R.id.itemSeekBar)
         val itemCurrentTime: TextView = itemView.findViewById(R.id.itemCurrentTime)
-        val itemPlayPause: ImageButton = itemView.findViewById(R.id.itemPlayPause)
+        val itemTotalTime: TextView = itemView.findViewById(R.id.itemTotalTime)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): EvidenceViewHolder {
@@ -37,23 +40,35 @@ class EvidenceAdapter(
 
     override fun onBindViewHolder(holder: EvidenceViewHolder, position: Int) {
         val evidence = evidences[position]
+        val isExpanded = position == expandedPosition
 
         holder.itemTitle.text = evidence.title
         holder.itemDate.text = evidence.dateText
         holder.itemDuration.text = evidence.durationText
+        holder.itemTotalTime.text = evidence.durationText
 
-        val isPlaying = evidence == currentlyPlaying
-        holder.playerControls.visibility = if (isPlaying) View.VISIBLE else View.GONE
-        holder.itemPlayPause.setImageResource(if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
+        holder.playerControls.visibility = if (isExpanded) View.VISIBLE else View.GONE
+        holder.itemPlayIcon.setImageResource(if (isExpanded && isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
 
         holder.itemView.setOnClickListener {
-            currentlyPlaying = if (isPlaying) null else evidence
-            notifyDataSetChanged()
-            if (currentlyPlaying != null) {
+            val previouslyExpandedPosition = expandedPosition
+            expandedPosition = if (isExpanded) -1 else position
+            notifyItemChanged(previouslyExpandedPosition)
+            notifyItemChanged(expandedPosition)
+
+            if (expandedPosition != -1) {
                 onPlayClick(evidence, holder)
             }
         }
-        
+
+        holder.itemPlayIcon.setOnClickListener {
+             if (isExpanded && isPlaying) {
+                onPauseClick(evidence)
+            } else {
+                onPlayClick(evidence, holder)
+            }
+        }
+
         holder.itemView.setOnLongClickListener {
             onRenameClick(evidence)
             true
@@ -62,7 +77,7 @@ class EvidenceAdapter(
         holder.itemSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    onSeekBarChange(evidence, progress)
+                    onSeekBarChange(progress)
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -77,8 +92,8 @@ class EvidenceAdapter(
         notifyDataSetChanged()
     }
     
-    fun updatePlaybackState(evidence: Evidence?, isPlaying: Boolean) {
-        currentlyPlaying = if (isPlaying) evidence else null
-        notifyDataSetChanged()
+    fun updatePlaybackState(isPlaying: Boolean) {
+        this.isPlaying = isPlaying
+        notifyItemChanged(expandedPosition)
     }
 }

@@ -6,7 +6,6 @@ import android.os.Handler
 import android.os.Looper
 import android.text.Editable
 import android.text.TextWatcher
-import android.util.Log
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Toast
@@ -38,7 +37,6 @@ class VaultActivity : AppCompatActivity() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var tempPlaybackFile: File? = null
-    private var currentlyPlayingHolder: EvidenceAdapter.EvidenceViewHolder? = null
     private val uiHandler = Handler(Looper.getMainLooper())
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,7 +49,8 @@ class VaultActivity : AppCompatActivity() {
 
         evidenceAdapter = EvidenceAdapter(
             onPlayClick = { evidence, holder -> playEvidence(evidence, holder) },
-            onSeekBarChange = { _, progress -> mediaPlayer?.seekTo(progress) },
+            onPauseClick = { pausePlayback() },
+            onSeekBarChange = { progress -> mediaPlayer?.seekTo(progress) },
             onRenameClick = { showRenameDialog(it) }
         )
         recyclerEvidence.adapter = evidenceAdapter
@@ -87,23 +86,24 @@ class VaultActivity : AppCompatActivity() {
 
     private fun loadList() {
         lifecycleScope.launch {
-            val evidenceList = withContext(Dispatchers.IO) {
-                val loadedTitles = EvidenceIndex.loadTitles(this@VaultActivity)
+            val (evidenceList, loadedTitles) = withContext(Dispatchers.IO) {
+                val titles = EvidenceIndex.loadTitles(this@VaultActivity)
                 val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
                 val files = vaultDir.listFiles()
                     ?.filter { it.isFile && it.name.endsWith(".enc") && it.name != "index.json.enc" }
                     ?.sortedByDescending { it.lastModified() }
                     ?: emptyList()
 
-                files.map { f ->
-                    val baseTitle = loadedTitles[f.name].takeUnless { it.isNullOrBlank() } ?: f.name
+                val evidences = files.map { f ->
+                    val baseTitle = titles[f.name].takeUnless { it.isNullOrBlank() } ?: f.name
                     val dateText = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE).format(Date(f.lastModified()))
                     val durationSec = extractDurationFromName(f.name)
                     Evidence(f, baseTitle, dateText, formatMMSS(durationSec))
                 }
+                Pair(evidences, titles)
             }
             allEvidences = evidenceList
-            this@VaultActivity.titles = evidenceList.associate { it.file.name to it.title }.toMutableMap()
+            this@VaultActivity.titles = loadedTitles
             evidenceAdapter.updateEvidences(evidenceList)
             if (evidenceList.isEmpty()) {
                 Toast.makeText(this@VaultActivity, "Aucun enregistrement", Toast.LENGTH_SHORT).show()
@@ -112,15 +112,7 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun playEvidence(evidence: Evidence, holder: EvidenceAdapter.EvidenceViewHolder) {
-        if (currentlyPlayingHolder == holder) { // Already playing, so pause
-            mediaPlayer?.pause()
-            evidenceAdapter.updatePlaybackState(null, false)
-            currentlyPlayingHolder = null
-            return
-        }
-
         cleanupMediaPlayer()
-        currentlyPlayingHolder = holder
 
         lifecycleScope.launch {
             val tempFile = withContext(Dispatchers.IO) {
@@ -142,6 +134,7 @@ class VaultActivity : AppCompatActivity() {
                     setOnCompletionListener { cleanupMediaPlayer() }
                     prepare()
                     start()
+                    evidenceAdapter.updatePlaybackState(true)
                     holder.itemSeekBar.max = duration
                     startSeekBarUpdate(holder)
                 } catch (e: Exception) {
@@ -149,6 +142,11 @@ class VaultActivity : AppCompatActivity() {
                 }
             }
         }
+    }
+
+    private fun pausePlayback() {
+        mediaPlayer?.pause()
+        evidenceAdapter.updatePlaybackState(false)
     }
 
     private fun startSeekBarUpdate(holder: EvidenceAdapter.EvidenceViewHolder) {
@@ -170,8 +168,7 @@ class VaultActivity : AppCompatActivity() {
         mediaPlayer?.release()
         mediaPlayer = null
         tempPlaybackFile?.delete()
-        evidenceAdapter.updatePlaybackState(null, false)
-        currentlyPlayingHolder = null
+        evidenceAdapter.updatePlaybackState(false)
     }
     
     private fun showRenameDialog(ev: Evidence) {

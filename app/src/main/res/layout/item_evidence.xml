@@ -6,17 +6,20 @@
     android:padding="16dp"
     android:layout_marginBottom="12dp">
 
-    <!-- Partie supérieure (toujours visible) -->
+    <!-- Partie supérieure, toujours visible -->
     <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
+        <!-- Titre et Date sur la gauche -->
         <LinearLayout
+            android:id="@+id/info_block"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:orientation="vertical"
             android:layout_alignParentStart="true"
-            android:layout_toStartOf="@id/itemDuration">
+            android:layout_centerVertical="true"
+            android:layout_toStartOf="@id/actions_block">
 
             <TextView
                 android:id="@+id/itemTitle"
@@ -32,40 +35,56 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="01/01/2026"
-                android:textColor="#A0A0A0" />
-
+                android:textColor="#A0A0A0"
+                android:textSize="14sp" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/itemDuration"
+        <!-- Durée et Icône de lecture sur la droite -->
+        <LinearLayout
+            android:id="@+id/actions_block"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="00:00"
-            android:textColor="#A0A0A0"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:layout_alignParentEnd="true"
-            android:layout_centerVertical="true"/>
+            android:layout_centerVertical="true">
+
+            <TextView
+                android:id="@+id/itemDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#A0A0A0"
+                android:layout_marginEnd="8dp"/>
+
+            <ImageButton
+                android:id="@+id/itemPlayIcon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_play_arrow"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:tint="@android:color/white"/>
+        </LinearLayout>
 
     </RelativeLayout>
 
-    <!-- Partie inférieure (lecteur, visible/caché) -->
+    <!-- Contrôles du lecteur, cachés par défaut -->
     <LinearLayout
         android:id="@+id/playerControls"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:visibility="gone" 
+        android:visibility="gone"
         android:paddingTop="12dp">
-        <!-- Le commentaire a été retiré d'ici pour corriger la syntaxe -->
 
         <SeekBar
             android:id="@+id/itemSeekBar"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
-
+        
         <RelativeLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
-
             <TextView
                 android:id="@+id/itemCurrentTime"
                 android:layout_width="wrap_content"
@@ -73,17 +92,13 @@
                 android:text="00:00"
                 android:textColor="#A0A0A0"
                 android:layout_alignParentStart="true"/>
-
-            <ImageButton
-                android:id="@+id/itemPlayPause"
-                android:layout_width="48dp"
-                android:layout_height="48dp"
-                android:src="@drawable/ic_play_arrow"
-                android:background="?attr/selectableItemBackgroundBorderless"
-                android:layout_centerInParent="true"/>
-
+            <TextView
+                android:id="@+id/itemTotalTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="00:00"
+                android:textColor="#A0A0A0"
+                android:layout_alignParentEnd="true"/>
         </RelativeLayout>
-
     </LinearLayout>
-
 </LinearLayout>
