@@ -19,6 +19,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.evidencevault.domain.CameraFacing
 import com.example.evidencevault.recording.RecordingService
+import com.example.evidencevault.recording.RecordingPreviewBridge
+import android.widget.EditText
+import android.text.InputType
 
 class MainActivity : AppCompatActivity() {
 
@@ -38,6 +41,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         previewView = findViewById(R.id.previewView)
+        RecordingPreviewBridge.set(previewView.surfaceProvider)
         switchMic = findViewById(R.id.switchMic)
         switchVideo = findViewById(R.id.switchVideo)
         btnRecord = findViewById(R.id.btnRecord)
@@ -116,6 +120,19 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    override fun onResume() {
+        super.onResume()
+        if (::previewView.isInitialized) {
+            RecordingPreviewBridge.set(previewView.surfaceProvider)
+            if (!isRecording && cameraProvider != null) bindPreviewIfPossible()
+        }
+    }
+
+    override fun onDestroy() {
+        RecordingPreviewBridge.clear()
+        super.onDestroy()
+    }
+
     private fun startPreview() {
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
@@ -165,7 +182,13 @@ class MainActivity : AppCompatActivity() {
             putExtra(RecordingService.EXTRA_CAMERA_FACING, facing)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
+        } catch (e: Exception) {
+            bindPreviewIfPossible()
+            Toast.makeText(this, "Impossible de démarrer : ${e.message}", Toast.LENGTH_LONG).show()
+            return
+        }
 
         isRecording = true
         updateRecordUi()
@@ -186,7 +209,12 @@ class MainActivity : AppCompatActivity() {
         val i = Intent(this, RecordingService::class.java).apply {
             action = RecordingService.ACTION_STOP
         }
-        startService(i)
+        try {
+            startService(i)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Impossible d'arrêter : ${e.message}", Toast.LENGTH_LONG).show()
+            return
+        }
 
         isRecording = false
         updateRecordUi()
