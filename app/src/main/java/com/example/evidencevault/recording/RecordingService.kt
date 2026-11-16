@@ -10,6 +10,7 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
@@ -47,6 +48,9 @@ class RecordingService : LifecycleService() {
     private var activeRecording: Recording? = null
     private var tempFile: File? = null
     private var isVideo = false
+    private var videoInitializing = false
+    private var pendingStop = false
+    private var finalizing = false
 
     private val audioRecorder by lazy { AudioRecorder(this) }
 
@@ -80,35 +84,64 @@ class RecordingService : LifecycleService() {
     }
 
     private fun startVideoRecording(micEnabled: Boolean, facing: String) {
-        if (activeRecording != null) return
-
-        startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this))
-
+        if (activeRecording != null || videoInitializing || finalizing) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            failBeforeCapture("Autorisation caméra absente.")
+            return
+        }
+        if (micEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            failBeforeCapture("Autorisation microphone absente.")
+            return
+        }
+        videoInitializing = true
+        pendingStop = false
+        val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+            (if (micEnabled) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this), types)
+        } else startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this))
         val tmpDir = File(cacheDir, "temp").apply { mkdirs() }
-        tempFile = File(tmpDir, "video_tmp_${System.currentTimeMillis()}.mp4")
-
+        val output = File(tmpDir, "video_tmp_${java.util.UUID.randomUUID()}.mp4")
+        tempFile = output
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
-            cameraProvider = future.get()
-            val selector = if (facing == "FRONT") CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-            val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
-            videoCapture = VideoCapture.withOutput(recorder)
-            cameraProvider?.unbindAll()
-            cameraProvider?.bindToLifecycle(this, selector, videoCapture)
-
-            val out = FileOutputOptions.Builder(tempFile!!).build()
-            val pending = videoCapture!!.output.prepareRecording(this, out).apply {
-                if (micEnabled &&
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                        this@RecordingService, android.Manifest.permission.RECORD_AUDIO
-                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) withAudioEnabled()
-            }
-
-            activeRecording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
-                if (event is VideoRecordEvent.Finalize) {
-                    if (event.hasError()) cleanupAfterStop() else tempFile?.let { onFileReadyToEncrypt(it) }
+            try {
+                val provider = future.get()
+                cameraProvider = provider
+                val selector = if (facing == "FRONT") CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
+                val capture = VideoCapture.withOutput(recorder)
+                videoCapture = capture
+                val surface = RecordingPreviewBridge.get()
+                val preview = if (surface != null) Preview.Builder().build().apply {
+                    setSurfaceProvider(surface)
+                } else null
+                provider.unbindAll()
+                if (preview != null) provider.bindToLifecycle(this, selector, preview, capture)
+                else provider.bindToLifecycle(this, selector, capture)
+                val pending = capture.output.prepareRecording(this, FileOutputOptions.Builder(output).build()).apply {
+                    if (micEnabled) withAudioEnabled()
                 }
+                activeRecording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        activeRecording = null
+                        finalizing = true
+                        if (event.hasError()) {
+                            Log.e(TAG, "Finalisation vidéo impossible: ${event.error} / ${event.cause}")
+                            reportFailure("Capture vidéo échouée : temporaire conservé.")
+                            cleanupAfterStop()
+                        } else onFileReadyToEncrypt(output)
+                    }
+                }
+                videoInitializing = false
+                if (pendingStop) {
+                    pendingStop = false
+                    activeRecording?.stop()
+                }
+            } catch (e: Exception) {
+                videoInitializing = false
+                Log.e(TAG, "Échec lancement CameraX", e)
+                failBeforeCapture("Capture vidéo impossible : ${e.javaClass.simpleName}.")
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -163,8 +196,8 @@ class RecordingService : LifecycleService() {
 
     private fun stopAnyRecording() {
         if (isVideo) {
-            activeRecording?.stop()
-            activeRecording = null
+            if (videoInitializing) pendingStop = true
+            else if (!finalizing) activeRecording?.stop()
         } else {
             stopAudioRecording()
         }
@@ -239,6 +272,9 @@ class RecordingService : LifecycleService() {
         cameraProvider = null
         videoCapture = null
         tempFile = null
+        videoInitializing = false
+        pendingStop = false
+        finalizing = false
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }
