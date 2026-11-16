@@ -49,10 +49,12 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnBackPreview.setOnClickListener {
+            if (isRecording) return@setOnClickListener
             currentFacing = CameraFacing.BACK
             bindPreviewIfPossible()
         }
         btnFrontPreview.setOnClickListener {
+            if (isRecording) return@setOnClickListener
             currentFacing = CameraFacing.FRONT
             bindPreviewIfPossible()
         }
@@ -62,6 +64,12 @@ class MainActivity : AppCompatActivity() {
             else stopCapture()
         }
 
+        switchVideo.setOnCheckedChangeListener { _, checked ->
+            switchMic.isEnabled = checked
+            switchMic.alpha = if (checked) 1f else 0.5f
+            if (!checked) switchMic.isChecked = true
+        }
+        updateRecordUi()
         ensurePermissionsThenStartPreview()
     }
 
@@ -160,7 +168,18 @@ class MainActivity : AppCompatActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
 
         isRecording = true
-        btnRecord.setImageResource(R.drawable.ic_stop)
+        updateRecordUi()
+    }
+
+    private fun updateRecordUi() {
+        btnRecord.setImageResource(if (isRecording) R.drawable.ic_stop else R.drawable.ic_record)
+        btnRecord.contentDescription = if (isRecording) "Arrêter l'enregistrement" else "Démarrer l'enregistrement"
+        btnBackPreview.isEnabled = !isRecording
+        btnFrontPreview.isEnabled = !isRecording
+        switchVideo.isEnabled = !isRecording
+        switchMic.isEnabled = !isRecording && switchVideo.isChecked
+        findViewById<android.widget.TextView>(R.id.recordStatus).text =
+            if (isRecording) "ENREGISTREMENT EN COURS" else "PRÊT À ENREGISTRER"
     }
 
     private fun stopCapture() {
@@ -170,8 +189,7 @@ class MainActivity : AppCompatActivity() {
         startService(i)
 
         isRecording = false
-        btnRecord.setImageResource(R.drawable.ic_record)
-
+        updateRecordUi()
         bindPreviewIfPossible()
     }
 }

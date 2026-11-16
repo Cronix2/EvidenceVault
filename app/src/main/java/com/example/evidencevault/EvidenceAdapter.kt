@@ -54,6 +54,11 @@ class EvidenceAdapter(
         holder.playerControls.visibility = if (isExpanded) View.VISIBLE else View.GONE
         holder.itemPlayIcon.setImageResource(if (isExpanded && isPlaying) R.drawable.ic_pause else R.drawable.ic_play_arrow)
 
+        holder.imgIntegrity.contentDescription = when (evidence.integrity) {
+            IntegrityStatus.OK -> "Intégrité vérifiée"
+            IntegrityStatus.MODIFIED -> "Intégrité compromise"
+            IntegrityStatus.UNVERIFIED -> "Intégrité non vérifiée"
+        }
         holder.imgIntegrity.setImageResource(
             when (evidence.integrity) {
                 IntegrityStatus.OK -> R.drawable.ic_integrity_ok
@@ -63,14 +68,14 @@ class EvidenceAdapter(
         )
 
         holder.itemView.setOnClickListener {
-            val previouslyExpandedPosition = expandedPosition
-            expandedPosition = if (isExpanded) -1 else position
-            notifyItemChanged(previouslyExpandedPosition)
-            notifyItemChanged(expandedPosition)
-
-            if (expandedPosition != -1) {
-                onPlayClick(evidence, holder)
-            }
+            val oldPosition = expandedPosition
+            val clickedPosition = holder.bindingAdapterPosition
+            if (clickedPosition == RecyclerView.NO_POSITION) return@setOnClickListener
+            expandedPosition = if (clickedPosition == oldPosition) -1 else clickedPosition
+            if (oldPosition in evidences.indices) notifyItemChanged(oldPosition)
+            if (expandedPosition in evidences.indices) notifyItemChanged(expandedPosition)
+            if (expandedPosition != -1) onPlayClick(evidence, holder)
+            else onPauseClick(evidence)
         }
 
         holder.itemPlayIcon.setOnClickListener {
@@ -104,12 +109,14 @@ class EvidenceAdapter(
     override fun getItemCount(): Int = evidences.size
 
     fun updateEvidences(newEvidences: List<Evidence>) {
-        this.evidences = newEvidences
+        evidences = newEvidences
+        expandedPosition = -1
+        isPlaying = false
         notifyDataSetChanged()
     }
-    
+
     fun updatePlaybackState(isPlaying: Boolean) {
         this.isPlaying = isPlaying
-        notifyItemChanged(expandedPosition)
+        if (expandedPosition in evidences.indices) notifyItemChanged(expandedPosition)
     }
 }

@@ -67,7 +67,7 @@ class VaultActivity : AppCompatActivity() {
         )
         recyclerEvidence.adapter = evidenceAdapter
 
-        findViewById<ImageButton>(R.id.btnRecord).setOnClickListener { finish() }
+        findViewById<android.view.View>(R.id.btnRecord).setOnClickListener { finish() }
         findViewById<ImageButton>(R.id.btnExport).setOnClickListener { askExport() }
 
         searchBar.addTextChangedListener(object : TextWatcher {
@@ -84,6 +84,7 @@ class VaultActivity : AppCompatActivity() {
             it.title.contains(query, ignoreCase = true) || 
             it.dateText.contains(query, ignoreCase = true) 
         }
+        cleanupMediaPlayer()
         evidenceAdapter.updateEvidences(filteredList)
     }
 
@@ -131,23 +132,29 @@ class VaultActivity : AppCompatActivity() {
             }
             allEvidences = evidenceList
             this@VaultActivity.titles = loadedTitles.toMutableMap()
-            evidenceAdapter.updateEvidences(evidenceList)
-            if (evidenceList.isEmpty()) {
-                Toast.makeText(this@VaultActivity, "Aucun enregistrement", Toast.LENGTH_SHORT).show()
-            }
+            filterList(searchBar.text?.toString().orEmpty())
+            findViewById<android.widget.TextView>(R.id.emptyState).visibility =
+                if (evidenceList.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
         }
     }
 
     private fun playEvidence(evidence: Evidence, holder: EvidenceAdapter.EvidenceViewHolder) {
-        cleanupMediaPlayer() 
+        cleanupMediaPlayer()
+        if (evidence.file.name.endsWith(".mp4.enc", ignoreCase = true)) {
+            Toast.makeText(this, "Lecture vidéo : lecteur dédié à venir", Toast.LENGTH_LONG).show()
+            return
+        }
 
         lifecycleScope.launch {
             val tempFile = withContext(Dispatchers.IO) {
+                val outTemp = File.createTempFile("ev_play_", ".m4a", cacheDir)
                 try {
-                    val outTemp = File(cacheDir, "play.m4a")
                     CryptoVault.decryptFileTo(evidence.file, outTemp)
                     outTemp
-                } catch (e: Exception) { null }
+                } catch (e: Exception) {
+                    outTemp.delete()
+                    null
+                }
             }
             if (tempFile == null) {
                 Toast.makeText(this@VaultActivity, "Erreur de lecture", Toast.LENGTH_LONG).show()
@@ -166,6 +173,7 @@ class VaultActivity : AppCompatActivity() {
                     startSeekBarUpdate(holder)
                 } catch (e: Exception) {
                     cleanupMediaPlayer()
+                    Toast.makeText(this@VaultActivity, "Lecture impossible", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -195,6 +203,7 @@ class VaultActivity : AppCompatActivity() {
         mediaPlayer?.release()
         mediaPlayer = null
         tempPlaybackFile?.delete()
+        tempPlaybackFile = null
         evidenceAdapter.updatePlaybackState(false)
     }
     
