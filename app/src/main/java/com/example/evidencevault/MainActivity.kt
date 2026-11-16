@@ -10,7 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ImageButton
-import android.widget.Switch
+import com.google.android.material.materialswitch.MaterialSwitch
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -29,8 +29,8 @@ import android.text.InputType
 class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
-    private lateinit var switchMic: Switch
-    private lateinit var switchVideo: Switch
+    private lateinit var switchMic: MaterialSwitch
+    private lateinit var switchVideo: MaterialSwitch
     private lateinit var btnRecord: ImageButton
     private lateinit var btnBackPreview: Button
     private lateinit var btnFrontPreview: Button
