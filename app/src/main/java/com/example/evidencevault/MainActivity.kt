@@ -63,7 +63,9 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnVault).setOnClickListener {
             startActivity(Intent(this, VaultActivity::class.java))
         }
-        findViewById<ImageButton>(R.id.btnSettings).setOnClickListener { configureVaultPin() }
+        findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
+            SecuritySettings.show(this, isRecording || isStopping)
+        }
 
         btnBackPreview.setOnClickListener {
             if (isRecording) return@setOnClickListener
