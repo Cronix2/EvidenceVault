@@ -1,6 +1,9 @@
 package com.example.evidencevault
 
 import android.content.Context
+import com.example.evidencevault.pulse.PulseSettings
+import com.example.evidencevault.pulse.PulseScheduler
+import com.example.evidencevault.pulse.PulseConfig
 import android.text.InputType
 import android.widget.EditText
 import android.widget.Toast
@@ -20,12 +23,14 @@ import kotlinx.coroutines.withContext
 object SecuritySettings {
     fun show(activity: AppCompatActivity, captureActive: Boolean) {
         val entries = arrayOf("Définir / modifier le PIN du coffre",
-            "Définir / modifier le PIN d'effacement", "Effacer les preuves de cet appareil")
+            "Définir / modifier le PIN d'effacement", "Effacer les preuves de cet appareil",
+            "Pulse · sauvegarde automatique")
         AlertDialog.Builder(activity).setTitle("Sécurité")
             .setItems(entries) { _, which ->
                 when (which) {
                     0 -> changePin(activity, false)
                     1 -> changePin(activity, true)
+                    3 -> PulseSettings.show(activity)
                     2 -> if (captureActive) {
                         Toast.makeText(activity, "Arrêtez d'abord l'enregistrement", Toast.LENGTH_LONG).show()
                     } else requestPurge(activity)
@@ -106,6 +111,7 @@ object SecuritySettings {
                         try {
                             val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
                             if (ks.containsAlias("evidencevault_aes")) ks.deleteEntry("evidencevault_aes")
+                            PulseScheduler.stop(activity)
                             val evidence = File(activity.filesDir, "evidence")
                             val cache = File(activity.cacheDir, "temp")
                             val deletedEvidence = !evidence.exists() || evidence.deleteRecursively()
@@ -114,7 +120,10 @@ object SecuritySettings {
                                 it.name.startsWith("ev_play_") || it.name.startsWith("ev_video_") ||
                                     it.name.startsWith("manifest_plain") || it.name.startsWith("index_plain")
                             }?.forEach { it.delete() }
-                            if (deletedEvidence && deletedCache) VaultPin.clearCredentials(activity)
+                            if (deletedEvidence && deletedCache) {
+                                PulseConfig.clear(activity)
+                                VaultPin.clearCredentials(activity)
+                            }
                             deletedEvidence && deletedCache
                         } catch (_: Exception) { false }
                     }
