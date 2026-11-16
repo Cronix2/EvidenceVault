@@ -17,6 +17,9 @@ import android.content.DialogInterface
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.biometric.BiometricManager
+import androidx.biometric.BiometricPrompt
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -133,6 +136,33 @@ class VaultActivity : AppCompatActivity() {
                         finish()
                     }
                 }
+            }
+        }
+        if (BiometricManager.from(this).canAuthenticate(
+                BiometricManager.Authenticators.BIOMETRIC_STRONG
+            ) == BiometricManager.BIOMETRIC_SUCCESS) {
+            dialog.setButton(DialogInterface.BUTTON_NEUTRAL, "Biométrie") { _, _ ->
+                val prompt = BiometricPrompt(this,
+                    ContextCompat.getMainExecutor(this),
+                    object : BiometricPrompt.AuthenticationCallback() {
+                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
+                            super.onAuthenticationSucceeded(result)
+                            unlocked = true
+                            failedAttempts = 0
+                            findViewById<android.view.View>(R.id.vaultContent).visibility = android.view.View.VISIBLE
+                            loadList()
+                        }
+                        override fun onAuthenticationError(code: Int, message: CharSequence) {
+                            super.onAuthenticationError(code, message)
+                            if (!unlocked) showUnlockPrompt()
+                        }
+                    })
+                prompt.authenticate(BiometricPrompt.PromptInfo.Builder()
+                    .setTitle("Déverrouiller les preuves")
+                    .setSubtitle("Empreinte ou autre biométrie autorisée par Android")
+                    .setNegativeButtonText("Utiliser le PIN")
+                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
+                    .build())
             }
         }
         dialog.show()
