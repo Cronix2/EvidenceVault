@@ -12,6 +12,7 @@ import android.widget.ImageButton
 import android.widget.Toast
 import android.widget.VideoView
 import android.widget.MediaController
+import com.google.android.material.chip.ChipGroup
 import android.text.InputType
 import android.content.DialogInterface
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +47,7 @@ class VaultActivity : AppCompatActivity() {
     private lateinit var searchBar: EditText
 
     private var allEvidences: List<Evidence> = emptyList()
+    private var mediaFilter = "all"
     private var titles: MutableMap<String, String> = mutableMapOf()
 
     private var mediaPlayer: MediaPlayer? = null
@@ -84,6 +86,15 @@ class VaultActivity : AppCompatActivity() {
             showUnlockPrompt()
         } else unlocked = true
 
+        findViewById<ChipGroup>(R.id.filterChips).setOnCheckedStateChangeListener { _, selected ->
+            mediaFilter = when (selected.firstOrNull()) {
+                R.id.chipAudio -> "audio"
+                R.id.chipVideo -> "video"
+                else -> "all"
+            }
+            filterList(searchBar.text?.toString().orEmpty())
+        }
+
         searchBar.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -94,12 +105,22 @@ class VaultActivity : AppCompatActivity() {
     }
 
     private fun filterList(query: String) {
-        val filteredList = allEvidences.filter { 
-            it.title.contains(query, ignoreCase = true) || 
-            it.dateText.contains(query, ignoreCase = true) 
+        val filtered = allEvidences.filter { evidence ->
+            val matchesType = when (mediaFilter) {
+                "audio" -> evidence.file.name.endsWith(".m4a.enc")
+                "video" -> evidence.file.name.endsWith(".mp4.enc")
+                else -> true
+            }
+            matchesType && (evidence.title.contains(query, ignoreCase = true) ||
+                evidence.dateText.contains(query, ignoreCase = true))
         }
         cleanupMediaPlayer()
-        evidenceAdapter.updateEvidences(filteredList)
+        evidenceAdapter.updateEvidences(filtered)
+        val empty = findViewById<android.widget.TextView>(R.id.emptyState)
+        empty.text = if (allEvidences.isEmpty()) "Aucune preuve pour le moment"
+            else "Aucun enregistrement correspondant"
+        empty.visibility = if (filtered.isEmpty()) android.view.View.VISIBLE
+            else android.view.View.GONE
     }
 
     override fun onResume() {
@@ -208,8 +229,7 @@ class VaultActivity : AppCompatActivity() {
             allEvidences = evidenceList
             this@VaultActivity.titles = loadedTitles.toMutableMap()
             filterList(searchBar.text?.toString().orEmpty())
-            findViewById<android.widget.TextView>(R.id.emptyState).visibility =
-                if (evidenceList.isEmpty()) android.view.View.VISIBLE else android.view.View.GONE
+
         }
     }
 
