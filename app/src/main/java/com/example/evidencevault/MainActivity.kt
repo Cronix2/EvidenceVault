@@ -2,6 +2,9 @@ package com.example.evidencevault
 
 import android.Manifest
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -35,6 +38,15 @@ class MainActivity : AppCompatActivity() {
     private var cameraProvider: ProcessCameraProvider? = null
     private var currentFacing: CameraFacing = CameraFacing.BACK
     private var isRecording = false
+    private var isStopping = false
+    private val completedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            isRecording = false
+            isStopping = false
+            updateRecordUi()
+            bindPreviewIfPossible()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -65,8 +77,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnRecord.setOnClickListener {
-            if (!isRecording) startCapture()
-            else stopCapture()
+            if (isStopping) return@setOnClickListener
+            if (!isRecording) startCapture() else stopCapture()
         }
 
         switchVideo.setOnCheckedChangeListener { _, checked ->
@@ -119,6 +131,19 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this, completedReceiver, IntentFilter(RecordingService.ACTION_FINISHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterReceiver(completedReceiver)
     }
 
     override fun onResume() {
@@ -235,13 +260,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateRecordUi() {
         btnRecord.setImageResource(if (isRecording) R.drawable.ic_stop else R.drawable.ic_record)
+        btnRecord.isEnabled = !isStopping
         btnRecord.contentDescription = if (isRecording) "Arrêter l'enregistrement" else "Démarrer l'enregistrement"
         btnBackPreview.isEnabled = !isRecording
         btnFrontPreview.isEnabled = !isRecording
         switchVideo.isEnabled = !isRecording
         switchMic.isEnabled = !isRecording && switchVideo.isChecked
         findViewById<android.widget.TextView>(R.id.recordStatus).text =
-            if (isRecording) "ENREGISTREMENT EN COURS" else "PRÊT À ENREGISTRER"
+            if (isStopping) "FINALISATION EN COURS…" else if (isRecording) "ENREGISTREMENT EN COURS" else "PRÊT À ENREGISTRER"
     }
 
     private fun stopCapture() {
@@ -255,8 +281,8 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        isRecording = false
+        isStopping = true
         updateRecordUi()
-        bindPreviewIfPossible()
+        // Service announces completion after finalizing the encrypted evidence.
     }
 }
