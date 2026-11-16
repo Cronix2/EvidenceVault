@@ -40,9 +40,8 @@ jobs:
       - name: Create or update DRAFT release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.run_id) }}
         run: |
-          TAG="${TAG:-manual-${GITHUB_RUN_ID}}"
           APK=$(ls app/build/outputs/apk/debug/*.apk)
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" "$APK" app/build/outputs/apk/debug/SHA256SUMS --clobber
