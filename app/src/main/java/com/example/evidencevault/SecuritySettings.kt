@@ -72,8 +72,8 @@ object SecuritySettings {
             .setPositiveButton("Enregistrer") { _, _ ->
                 val value = field.text.toString()
                 if (value.length !in 6..12 || !value.all(Char::isDigit) ||
-                    (forWipe && VaultPin.verify(activity, value)) ||
-                    (!forWipe && VaultPin.verifyWipe(activity, value))) {
+                    (forWipe && VaultPin.matchesVaultWithoutPenalty(activity, value)) ||
+                    (!forWipe && VaultPin.matchesWipeWithoutPenalty(activity, value))) {
                     Toast.makeText(activity, "Code invalide ou identique à l'autre PIN", Toast.LENGTH_LONG).show()
                 } else {
                     if (forWipe) VaultPin.setWipe(activity, value)
