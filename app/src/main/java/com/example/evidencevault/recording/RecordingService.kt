@@ -93,7 +93,11 @@ class RecordingService : LifecycleService() {
 
             val out = FileOutputOptions.Builder(tempFile!!).build()
             val pending = videoCapture!!.output.prepareRecording(this, out).apply {
-                if (micEnabled) withAudioEnabled()
+                if (micEnabled &&
+                    androidx.core.content.ContextCompat.checkSelfPermission(
+                        this@RecordingService, android.Manifest.permission.RECORD_AUDIO
+                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                ) withAudioEnabled()
             }
 
             activeRecording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
