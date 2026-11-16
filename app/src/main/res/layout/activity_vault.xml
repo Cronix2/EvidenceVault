@@ -1,4 +1,5 @@
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0E0E0E"
@@ -20,7 +21,7 @@
         android:layout_alignParentEnd="true"
         android:background="@android:color/transparent"
         android:src="@drawable/ic_export"
-        android:tint="@android:color/white" />
+        app:tint="@android:color/white" />
 
     <EditText
         android:id="@+id/searchBar"
@@ -51,6 +52,6 @@
         android:layout_centerHorizontal="true"
         android:background="@drawable/bg_record_button"
         android:src="@drawable/ic_record"
-        android:tint="@android:color/white"/>
+        app:tint="@android:color/white"/>
 
 </RelativeLayout>
