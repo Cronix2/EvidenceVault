@@ -67,7 +67,7 @@ class VaultActivity : AppCompatActivity() {
         )
         recyclerEvidence.adapter = evidenceAdapter
 
-        findViewById<ImageButton>(R.id.btnRecord).setOnClickListener { finish() }
+        findViewById<android.view.View>(R.id.btnRecord).setOnClickListener { finish() }
         findViewById<ImageButton>(R.id.btnExport).setOnClickListener { askExport() }
 
         searchBar.addTextChangedListener(object : TextWatcher {
