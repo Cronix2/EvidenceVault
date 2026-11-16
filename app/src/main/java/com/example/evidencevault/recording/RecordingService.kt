@@ -25,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import com.example.evidencevault.crypto.CryptoVault
 import com.example.evidencevault.storage.IntegrityManifestRepo
+import com.example.evidencevault.pulse.PulseScheduler
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -253,6 +254,7 @@ class RecordingService : LifecycleService() {
                 IntegrityManifestRepo.appendForEvidenceFile(this@RecordingService, outEnc)
                 // Suppression du temporaire seulement après un chiffrement et une entrée de manifeste réussis.
                 tmp.delete()
+                PulseScheduler.once(this@RecordingService)
             } catch (t: Throwable) {
                 Log.e(TAG, "Traitement du fichier échoué, temporaire conservé", t)
                 reportFailure("Échec du traitement de l'enregistrement (${t.javaClass.simpleName}). Fichier temporaire conservé, non importé.")
