@@ -1,57 +1,99 @@
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0E0E0E"
-    android:padding="16dp">
+    android:orientation="vertical"
+    android:background="#080F19"
+    android:padding="20dp">
 
-    <TextView
-        android:id="@+id/txtTitle"
-        android:layout_width="wrap_content"
+    <LinearLayout
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Enregistrements"
-        android:textSize="22sp"
-        android:textStyle="bold"
-        android:textColor="@android:color/white"/>
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingTop="16dp">
 
-    <ImageButton
-        android:id="@+id/btnExport"
-        android:layout_width="32dp"
-        android:layout_height="32dp"
-        android:layout_alignParentEnd="true"
-        android:background="@android:color/transparent"
-        android:src="@drawable/ic_export"
-        app:tint="@android:color/white" />
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="MON COFFRE"
+                android:textSize="12sp"
+                android:letterSpacing="0.12"
+                android:textStyle="bold"
+                android:textColor="#93F2CB" />
+
+            <TextView
+                android:id="@+id/txtTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Enregistrements"
+                android:textSize="28sp"
+                android:textStyle="bold"
+                android:textColor="@android:color/white" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnExport"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/item_background_rounded"
+            android:contentDescription="Exporter les preuves chiffrées"
+            android:src="@drawable/ic_export"
+            app:tint="@android:color/white" />
+    </LinearLayout>
 
     <EditText
         android:id="@+id/searchBar"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_below="@id/txtTitle"
-        android:layout_marginTop="16dp"
-        android:background="#2C2C2E"
-        android:hint="Rechercher un enregistrement"
-        android:padding="12dp"
+        android:layout_height="54dp"
+        android:layout_marginTop="24dp"
+        android:background="@drawable/item_background_rounded"
+        android:hint="Rechercher par nom ou date"
+        android:inputType="text"
+        android:singleLine="true"
+        android:paddingHorizontal="18dp"
         android:textColor="@android:color/white"
-        android:textColorHint="#8E8E93" />
+        android:textColorHint="#A6B5C7" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/recyclerEvidence"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_below="@id/searchBar"
-        android:layout_marginTop="16dp"
-        android:clipToPadding="false"
-        android:paddingBottom="80dp"/>
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:layout_marginTop="20dp">
 
-    <ImageButton
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerEvidence"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingBottom="16dp" />
+
+        <TextView
+            android:id="@+id/emptyState"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="24dp"
+            android:text="Aucune preuve enregistrée pour le moment.\nVos captures chiffrées apparaîtront ici."
+            android:textColor="#A6B5C7"
+            android:textSize="15sp"
+            android:visibility="gone" />
+    </FrameLayout>
+
+    <Button
         android:id="@+id/btnRecord"
-        android:layout_width="64dp"
-        android:layout_height="64dp"
-        android:layout_alignParentBottom="true"
-        android:layout_centerHorizontal="true"
-        android:background="@drawable/bg_record_button"
-        android:src="@drawable/ic_record"
-        app:tint="@android:color/white"/>
-
-</RelativeLayout>
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:text="Retour à la capture"
+        android:textAllCaps="false"
+        android:contentDescription="Revenir à l'écran de capture" />
+</LinearLayout>

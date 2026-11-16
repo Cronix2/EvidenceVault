@@ -3,103 +3,161 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0E0E0E">
+    android:background="#080F19">
 
     <androidx.camera.view.PreviewView
         android:id="@+id/previewView"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
+        android:layout_height="match_parent"
+        android:contentDescription="Aperçu de la caméra" />
 
-    <!-- Top actions -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_gravity="top"
-        android:orientation="horizontal"
-        android:padding="16dp"
-        android:gravity="center_vertical">
-
-        <ImageButton
-            android:id="@+id/btnSettings"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@android:color/transparent"
-            android:src="@drawable/ic_settings"
-            app:tint="@android:color/white" />
-
-        <View
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_weight="1" />
-
-        <ImageButton
-            android:id="@+id/btnVault"
-            android:layout_width="36dp"
-            android:layout_height="36dp"
-            android:background="@android:color/transparent"
-            android:src="@drawable/ic_folder"
-            app:tint="@android:color/white" />
-    </LinearLayout>
-
-    <!-- Center controls -->
-    <LinearLayout
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center_vertical|end"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="16dp"
-        android:background="#80000000">
+        android:padding="20dp">
 
-        <Switch
-            android:id="@+id/switchVideo"
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingTop="12dp">
+
+            <ImageButton
+                android:id="@+id/btnSettings"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/item_background_rounded"
+                android:contentDescription="Paramètres"
+                android:src="@drawable/ic_settings"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="EVIDENCEVAULT"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:letterSpacing="0.12" />
+
+            <ImageButton
+                android:id="@+id/btnVault"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="@drawable/item_background_rounded"
+                android:contentDescription="Ouvrir le coffre"
+                android:src="@drawable/ic_folder"
+                app:tint="@android:color/white" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/recordStatus"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Vidéo"
-            android:checked="true"
-            android:textColor="@android:color/white" />
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/item_background_rounded"
+            android:paddingHorizontal="18dp"
+            android:paddingVertical="10dp"
+            android:text="PRÊT À ENREGISTRER"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:letterSpacing="0.07"
+            android:textColor="#93F2CB" />
 
-        <Switch
-            android:id="@+id/switchMic"
-            android:layout_width="wrap_content"
+        <Space android:layout_width="1dp" android:layout_height="0dp" android:layout_weight="1" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Mic"
-            android:checked="true"
-            android:textColor="@android:color/white" />
+            android:background="@drawable/item_background_rounded"
+            android:orientation="vertical"
+            android:padding="16dp">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="CAPTURE"
+                android:textColor="#93F2CB"
+                android:textSize="12sp"
+                android:letterSpacing="0.10"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="8dp">
+
+                <Switch
+                    android:id="@+id/switchVideo"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:checked="true"
+                    android:text="Vidéo"
+                    android:textColor="@android:color/white" />
+
+                <Switch
+                    android:id="@+id/switchMic"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:checked="true"
+                    android:text="Micro"
+                    android:textColor="@android:color/white" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/previewControls"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:weightSum="2">
+
+                <Button
+                    android:id="@+id/btnBackPreview"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:text="Caméra arrière"
+                    android:textAllCaps="false" />
+
+                <Button
+                    android:id="@+id/btnFrontPreview"
+                    android:layout_width="0dp"
+                    android:layout_height="48dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:text="Caméra avant"
+                    android:textAllCaps="false" />
+            </LinearLayout>
+
+            <ImageButton
+                android:id="@+id/btnRecord"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_gravity="center_horizontal"
+                android:layout_marginTop="20dp"
+                android:background="@drawable/bg_record_button"
+                android:contentDescription="Démarrer l'enregistrement"
+                android:src="@drawable/ic_record"
+                app:tint="@android:color/white" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center"
+                android:text="Appuyer pour commencer ou arrêter"
+                android:textSize="12sp"
+                android:textColor="#A6B5C7" />
+        </LinearLayout>
     </LinearLayout>
-
-    <!-- Preview selectors -->
-    <LinearLayout
-        android:id="@+id/previewControls"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="start|center_vertical"
-        android:orientation="vertical"
-        android:padding="16dp">
-
-        <Button
-            android:id="@+id/btnBackPreview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="back\npreview" />
-
-        <Button
-            android:id="@+id/btnFrontPreview"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="10dp"
-            android:text="front\npreview" />
-    </LinearLayout>
-
-    <!-- Record button -->
-    <ImageButton
-        android:id="@+id/btnRecord"
-        android:layout_width="88dp"
-        android:layout_height="88dp"
-        android:layout_gravity="bottom|center_horizontal"
-        android:layout_marginBottom="30dp"
-        android:background="@drawable/bg_record_button"
-        android:src="@drawable/ic_record"
-        app:tint="@android:color/white" />
-
 </FrameLayout>
