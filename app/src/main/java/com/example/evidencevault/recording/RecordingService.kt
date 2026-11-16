@@ -40,6 +40,8 @@ class RecordingService : LifecycleService() {
         const val ACTION_START_AUDIO = "EV_START_AUDIO"
         const val ACTION_STOP = "EV_STOP"
         const val ACTION_FINISHED = "EV_CAPTURE_FINISHED"
+        @Volatile var captureActive = false
+            private set
 
         const val EXTRA_MIC_ENABLED = "mic_enabled"
         const val EXTRA_CAMERA_FACING = "camera_facing"
@@ -67,12 +69,14 @@ class RecordingService : LifecycleService() {
         try {
             when (intent?.action) {
                 ACTION_START_VIDEO -> {
+                    captureActive = true
                     isVideo = true
                     val mic = intent.getBooleanExtra(EXTRA_MIC_ENABLED, true)
                     val facing = intent.getStringExtra(EXTRA_CAMERA_FACING) ?: "BACK"
                     startVideoRecording(mic, facing)
                 }
                 ACTION_START_AUDIO -> {
+                    captureActive = true
                     isVideo = false
                     startAudioRecording()
                 }
@@ -186,6 +190,7 @@ class RecordingService : LifecycleService() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         reportFailure(text)
         stopSelf()
+        captureActive = false
         sendBroadcast(Intent(ACTION_FINISHED).setPackage(packageName))
     }
 
@@ -285,6 +290,7 @@ class RecordingService : LifecycleService() {
             finalizing = false
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
+            captureActive = false
             sendBroadcast(Intent(ACTION_FINISHED).setPackage(packageName))
         }
     }
