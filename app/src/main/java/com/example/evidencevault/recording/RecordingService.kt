@@ -8,6 +8,8 @@ import android.content.pm.ServiceInfo
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -37,6 +39,7 @@ class RecordingService : LifecycleService() {
         const val ACTION_START_VIDEO = "EV_START_VIDEO"
         const val ACTION_START_AUDIO = "EV_START_AUDIO"
         const val ACTION_STOP = "EV_STOP"
+        const val ACTION_FINISHED = "EV_CAPTURE_FINISHED"
 
         const val EXTRA_MIC_ENABLED = "mic_enabled"
         const val EXTRA_CAMERA_FACING = "camera_facing"
@@ -183,6 +186,7 @@ class RecordingService : LifecycleService() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         reportFailure(text)
         stopSelf()
+        sendBroadcast(Intent(ACTION_FINISHED).setPackage(packageName))
     }
 
     private fun startAudioForeground() {
@@ -268,15 +272,21 @@ class RecordingService : LifecycleService() {
     }
 
     private fun cleanupAfterStop() {
-        cameraProvider?.unbindAll()
-        cameraProvider = null
-        videoCapture = null
-        tempFile = null
-        videoInitializing = false
-        pendingStop = false
-        finalizing = false
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // CameraX lifecycle operations must run on the main thread. Do not return
+        // preview ownership to MainActivity until the file has been finalized.
+        Handler(Looper.getMainLooper()).post {
+            cameraProvider?.unbindAll()
+            cameraProvider = null
+            videoCapture = null
+            activeRecording = null
+            tempFile = null
+            videoInitializing = false
+            pendingStop = false
+            finalizing = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            sendBroadcast(Intent(ACTION_FINISHED).setPackage(packageName))
+        }
     }
 
     override fun onDestroy() {
