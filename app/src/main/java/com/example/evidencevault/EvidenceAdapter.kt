@@ -27,6 +27,7 @@ class EvidenceAdapter(
     class EvidenceViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val itemTitle: TextView = itemView.findViewById(R.id.itemTitle)
         val itemDate: TextView = itemView.findViewById(R.id.itemDate)
+        val itemType: TextView = itemView.findViewById(R.id.itemType)
         val itemDuration: TextView = itemView.findViewById(R.id.itemDuration)
         val itemPlayIcon: ImageButton = itemView.findViewById(R.id.itemPlayIcon)
         val playerControls: LinearLayout = itemView.findViewById(R.id.playerControls)
@@ -48,6 +49,7 @@ class EvidenceAdapter(
 
         holder.itemTitle.text = evidence.title
         holder.itemDate.text = evidence.dateText
+        holder.itemType.text = if (evidence.file.name.endsWith(".mp4.enc")) "VIDÉO" else "AUDIO"
         holder.itemDuration.text = evidence.durationText
         holder.itemTotalTime.text = evidence.durationText
 
