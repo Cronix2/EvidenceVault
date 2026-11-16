@@ -150,8 +150,11 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        isRecording = RecordingService.captureActive
+        isStopping = false
         if (::previewView.isInitialized) {
             RecordingPreviewBridge.set(previewView.surfaceProvider)
+            updateRecordUi()
             if (!isRecording && cameraProvider != null) bindPreviewIfPossible()
         }
     }
