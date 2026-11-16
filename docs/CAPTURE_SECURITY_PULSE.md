@@ -15,7 +15,7 @@ La procédure de purge, déclenchée uniquement après saisie du PIN spécifique
 
 Les preuves sensibles ne doivent pas être considérées comme définitivement effacées sur toutes leurs copies par cette fonction.
 
-## Pulse — conception à implémenter avant activation
+## Pulse — client et serveur de référence
 
 ### Objectif
 
@@ -42,7 +42,7 @@ Les données **déjà chiffrées par AES-GCM ne se compressent pratiquement pas*
 - consentement au transfert, règle Wi-Fi / réseau mobile, niveau de compression et disponibilité d'espace disque ;
 - cahier d'API serveur et tests d'intégration.
 
-**Aucune synchronisation Pulse automatique n'est activée dans cette branche.** Le serveur n'étant pas défini, simuler une sauvegarde fonctionnelle serait trompeur.
+**Pulse est disponible comme implémentation pilote**, mais reste désactivé par défaut. Le serveur et son jeton doivent être configurés dans les paramètres. Voir [PULSE.md](PULSE.md). Les transferts et leur robustesse doivent encore être testés sur appareil réel et sur un serveur opérationnel.
 
 ## Tests avant fusion
 
