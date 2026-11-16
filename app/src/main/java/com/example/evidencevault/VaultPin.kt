@@ -36,6 +36,33 @@ object VaultPin {
         } catch (_: Exception) { false }
     }
 
+    fun wipeConfigured(ctx: Context): Boolean = prefs(ctx).contains("wipeHash")
+
+    fun setWipe(ctx: Context, pin: String) {
+        require(pin.length in 6..12 && pin.all(Char::isDigit))
+        val salt = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        val hash = derive(pin, salt)
+        check(prefs(ctx).edit()
+            .putString("wipeSalt", Base64.encodeToString(salt, Base64.NO_WRAP))
+            .putString("wipeHash", Base64.encodeToString(hash, Base64.NO_WRAP))
+            .commit())
+    }
+
+    fun verifyWipe(ctx: Context, pin: String): Boolean {
+        if (!wipeConfigured(ctx) || pin.length !in 6..12) return false
+        val prefs = prefs(ctx)
+        val salt = prefs.getString("wipeSalt", null) ?: return false
+        val hash = prefs.getString("wipeHash", null) ?: return false
+        return try {
+            MessageDigest.isEqual(Base64.decode(hash, Base64.DEFAULT),
+                derive(pin, Base64.decode(salt, Base64.DEFAULT)))
+        } catch (_: Exception) { false }
+    }
+
+    fun clearCredentials(ctx: Context) {
+        prefs(ctx).edit().clear().commit()
+    }
+
     private fun derive(pin: String, salt: ByteArray): ByteArray {
         val spec = PBEKeySpec(pin.toCharArray(), salt, ITERATIONS, 256)
         return try {
