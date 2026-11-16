@@ -221,6 +221,13 @@ class RecordingService : LifecycleService() {
     }
 
     private fun reportFailure(text: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Sans POST_NOTIFICATIONS, l'erreur est seulement journalisée : rien n'est importé dans tous les cas.
+            Log.e(TAG, "Notification refusée, erreur non affichée : $text")
+            return
+        }
         try {
             val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
             nm.notify(NotificationUtils.NOTIF_ERROR_ID, NotificationUtils.buildErrorNotification(this, text))
