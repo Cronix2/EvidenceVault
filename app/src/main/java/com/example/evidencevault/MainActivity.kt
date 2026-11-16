@@ -9,6 +9,7 @@ import android.widget.Button
 import android.widget.ImageButton
 import android.widget.Switch
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
@@ -64,15 +65,10 @@ class MainActivity : AppCompatActivity() {
         ensurePermissionsThenStartPreview()
     }
 
+    // Seule la caméra est demandée au lancement (prévisualisation). Le micro est demandé à la demande, au moment de l'enregistrement.
     private fun ensurePermissionsThenStartPreview() {
-        val needed = mutableListOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
-
-        val missing = needed.filter {
-            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
-        }
-
-        if (missing.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missing.toTypedArray(), 1001)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.CAMERA), 1001)
         } else {
             startPreview()
         }
@@ -80,13 +76,36 @@ class MainActivity : AppCompatActivity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 1001) {
-            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+        val granted = grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }
+        when (requestCode) {
+            1001 -> if (granted) {
                 startPreview()
             } else {
-                Toast.makeText(this, "Permissions CAMERA/AUDIO requises", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Permission caméra requise pour la prévisualisation", Toast.LENGTH_LONG).show()
+            }
+            1002 -> if (granted) {
+                Toast.makeText(this, "Micro autorisé : appuyez à nouveau sur enregistrer", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(this, "Enregistrement refusé : permission micro absente", Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    private fun hasMicPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun askMicPermissionWithRationale() {
+        AlertDialog.Builder(this)
+            .setTitle("Autoriser le micro ?")
+            .setMessage(
+                "Le micro sert uniquement à enregistrer le son de cette capture, et seulement après votre appui sur enregistrer. " +
+                    "Sans cette autorisation, la capture ne démarre pas."
+            )
+            .setPositiveButton("Autoriser") { _, _ ->
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1002)
+            }
+            .setNegativeButton("Annuler", null)
+            .show()
     }
 
     private fun startPreview() {
@@ -120,9 +139,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCapture() {
-        val mic = switchMic.isChecked
         val video = switchVideo.isChecked
+        // La capture audio seule utilise toujours le micro.
+        val mic = switchMic.isChecked || !video
         val facing = currentFacing.name
+
+        if (mic && !hasMicPermission()) {
+            askMicPermissionWithRationale()
+            return
+        }
 
         cameraProvider?.unbindAll()
 
