@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat
 import com.example.evidencevault.domain.CameraFacing
 import com.example.evidencevault.recording.RecordingService
 import com.example.evidencevault.recording.RecordingPreviewBridge
+import com.example.evidencevault.pulse.PulseScheduler
 import android.widget.EditText
 import android.text.InputType
 
@@ -89,6 +90,8 @@ class MainActivity : AppCompatActivity() {
             if (!checked) switchMic.isChecked = true
         }
         updateRecordUi()
+        PulseScheduler.periodic(this)
+        PulseScheduler.once(this)
         ensurePermissionsThenStartPreview()
     }
 
