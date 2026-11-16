@@ -51,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnVault).setOnClickListener {
             startActivity(Intent(this, VaultActivity::class.java))
         }
+        findViewById<ImageButton>(R.id.btnSettings).setOnClickListener { configureVaultPin() }
 
         btnBackPreview.setOnClickListener {
             if (isRecording) return@setOnClickListener
@@ -131,6 +132,44 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         RecordingPreviewBridge.clear()
         super.onDestroy()
+    }
+
+    private fun configureVaultPin() {
+        fun chooseNewPin() {
+            val field = EditText(this).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                hint = "6 à 12 chiffres"
+            }
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("PIN du coffre")
+                .setMessage("Ce code protège l'ouverture de la galerie. Il ne remplace pas le chiffrement du coffre.")
+                .setView(field)
+                .setNegativeButton("Annuler", null)
+                .setPositiveButton("Enregistrer") { _, _ ->
+                    val pin = field.text.toString()
+                    if (pin.length in 6..12 && pin.all(Char::isDigit)) {
+                        VaultPin.set(this, pin)
+                        Toast.makeText(this, "PIN enregistré", Toast.LENGTH_SHORT).show()
+                    } else Toast.makeText(this, "PIN invalide : 6 à 12 chiffres", Toast.LENGTH_LONG).show()
+                }
+                .show()
+        }
+        if (!VaultPin.configured(this)) {
+            chooseNewPin()
+            return
+        }
+        val field = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "Code actuel"
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Changer le PIN")
+            .setView(field)
+            .setNegativeButton("Annuler", null)
+            .setPositiveButton("Continuer") { _, _ ->
+                if (VaultPin.verify(this, field.text.toString())) chooseNewPin()
+                else Toast.makeText(this, "PIN incorrect", Toast.LENGTH_LONG).show()
+            }.show()
     }
 
     private fun startPreview() {
