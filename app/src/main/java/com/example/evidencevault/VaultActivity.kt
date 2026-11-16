@@ -10,6 +10,10 @@ import android.text.TextWatcher
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.Toast
+import android.widget.VideoView
+import android.widget.MediaController
+import android.text.InputType
+import android.content.DialogInterface
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -44,6 +48,8 @@ class VaultActivity : AppCompatActivity() {
     private var mediaPlayer: MediaPlayer? = null
     private var tempPlaybackFile: File? = null
     private val uiHandler = Handler(Looper.getMainLooper())
+    private var unlocked = false
+    private var failedAttempts = 0
 
     private val createZipLauncher =
         registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -70,6 +76,11 @@ class VaultActivity : AppCompatActivity() {
         findViewById<android.view.View>(R.id.btnRecord).setOnClickListener { finish() }
         findViewById<ImageButton>(R.id.btnExport).setOnClickListener { askExport() }
 
+        if (VaultPin.configured(this)) {
+            findViewById<android.view.View>(R.id.vaultContent).visibility = android.view.View.INVISIBLE
+            showUnlockPrompt()
+        } else unlocked = true
+
         searchBar.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -90,7 +101,41 @@ class VaultActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        loadList()
+        if (unlocked) loadList()
+    }
+
+    private fun showUnlockPrompt() {
+        val field = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "PIN du coffre"
+        }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Déverrouiller le coffre")
+            .setView(field)
+            .setCancelable(false)
+            .setNegativeButton("Retour") { _, _ -> finish() }
+            .setPositiveButton("Déverrouiller", null)
+            .create()
+        dialog.setOnShowListener {
+            dialog.getButton(DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+                if (VaultPin.verify(this, field.text.toString())) {
+                    unlocked = true
+                    failedAttempts = 0
+                    findViewById<android.view.View>(R.id.vaultContent).visibility = android.view.View.VISIBLE
+                    dialog.dismiss()
+                    loadList()
+                } else {
+                    failedAttempts++
+                    field.text.clear()
+                    Toast.makeText(this, "PIN incorrect", Toast.LENGTH_SHORT).show()
+                    if (failedAttempts >= 5) {
+                        dialog.dismiss()
+                        finish()
+                    }
+                }
+            }
+        }
+        dialog.show()
     }
 
     override fun onStop() {
@@ -106,7 +151,7 @@ class VaultActivity : AppCompatActivity() {
 
                 val vaultDir = File(filesDir, "evidence").apply { mkdirs() }
                 val files = vaultDir.listFiles()
-                    ?.filter { it.isFile && it.name.endsWith(".enc") && it.name != "index.json.enc" && it.name != "manifest.json.enc" }
+                    ?.filter { it.isFile && (it.name.endsWith(".m4a.enc") || it.name.endsWith(".mp4.enc")) }
                     ?.sortedByDescending { it.lastModified() }
                     ?: emptyList()
 
@@ -141,7 +186,7 @@ class VaultActivity : AppCompatActivity() {
     private fun playEvidence(evidence: Evidence, holder: EvidenceAdapter.EvidenceViewHolder) {
         cleanupMediaPlayer()
         if (evidence.file.name.endsWith(".mp4.enc", ignoreCase = true)) {
-            Toast.makeText(this, "Lecture vidéo : lecteur dédié à venir", Toast.LENGTH_LONG).show()
+            playVideoEvidence(evidence)
             return
         }
 
@@ -175,6 +220,46 @@ class VaultActivity : AppCompatActivity() {
                     cleanupMediaPlayer()
                     Toast.makeText(this@VaultActivity, "Lecture impossible", Toast.LENGTH_LONG).show()
                 }
+            }
+        }
+    }
+
+    private fun playVideoEvidence(evidence: Evidence) {
+        lifecycleScope.launch {
+            val decrypted = withContext(Dispatchers.IO) {
+                val temp = File.createTempFile("ev_video_", ".mp4", cacheDir)
+                try {
+                    CryptoVault.decryptFileTo(evidence.file, temp)
+                    temp
+                } catch (_: Exception) {
+                    temp.delete()
+                    null
+                }
+            }
+            if (decrypted == null) {
+                Toast.makeText(this@VaultActivity, "Vidéo illisible ou corrompue", Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            val player = VideoView(this@VaultActivity).apply {
+                minimumHeight = (260f * resources.displayMetrics.density).toInt()
+            }
+            val dialog = AlertDialog.Builder(this@VaultActivity)
+                .setTitle(evidence.title)
+                .setView(player)
+                .setPositiveButton("Fermer", null)
+                .create()
+            dialog.setOnDismissListener {
+                player.stopPlayback()
+                decrypted.delete()
+            }
+            dialog.show()
+            player.setVideoPath(decrypted.absolutePath)
+            player.setMediaController(MediaController(this@VaultActivity).apply { setAnchorView(player) })
+            player.setOnPreparedListener { player.start() }
+            player.setOnErrorListener { _, _, _ ->
+                Toast.makeText(this@VaultActivity, "Lecture vidéo impossible", Toast.LENGTH_SHORT).show()
+                dialog.dismiss()
+                true
             }
         }
     }
