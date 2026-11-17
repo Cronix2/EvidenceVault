@@ -1,52 +1,97 @@
-name: Release (draft)
+name: Auto release Android APK
 
 on:
   push:
-    tags:
-      - 'v*'
-  workflow_dispatch:
+    branches:
+      - master
 
 permissions:
   contents: write
 
-jobs:
-  draft-release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@v4
+# Queue every master modification rather than canceling earlier releases.
+concurrency:
+  group: evidencevault-auto-release
+  cancel-in-progress: false
 
-      - name: Set up JDK 17
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact pushed commit
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: Verify preinstalled Android SDK
-        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME"
+      - name: Check Android SDK
+        run: test -d "$ANDROID_HOME"
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
-
-      - name: Compute SHA-256
-        run: |
-          cd app/build/outputs/apk/debug
-          sha256sum *.apk > SHA256SUMS
-          cat SHA256SUMS
-
-      - name: Create or update DRAFT release
+      - name: Select unique release version
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_type == 'tag' && github.ref_name || format('manual-{0}', github.run_id) }}
+        shell: bash
         run: |
-          APK=$(ls app/build/outputs/apk/debug/*.apk)
+          set -euo pipefail
+          BASE=$(sed -n 's/.*evReleaseName").orNull ?: "\([^"]*\)".*/\1/p' app/build.gradle.kts | head -n 1)
+          test -n "$BASE" || { echo "::error::Cannot find base versionName"; exit 1; }
+          TAG="v$BASE"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" app/build/outputs/apk/debug/SHA256SUMS --clobber
-          else
-            gh release create "$TAG" "$APK" app/build/outputs/apk/debug/SHA256SUMS \
-              --draft --title "EvidenceVault $TAG (brouillon)" \
-              --notes "Build debug non signé. Brouillon : publication manuelle requise. Tests sur appareil à faire par le testeur."
+            TAG="v${BASE}.build.${GITHUB_RUN_NUMBER}"
           fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "::error::Release $TAG already exists; refusing to overwrite artifacts"
+            exit 1
+          fi
+          RELEASE_NAME="${TAG#v}"
+          RELEASE_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          echo "RELEASE_TAG=$TAG" >> "$GITHUB_ENV"
+          echo "RELEASE_NAME=$RELEASE_NAME" >> "$GITHUB_ENV"
+          echo "RELEASE_CODE=$RELEASE_CODE" >> "$GITHUB_ENV"
+
+      - name: Build, unit tests and lint
+        shell: bash
+        run: |
+          chmod +x ./gradlew
+          ./gradlew testDebugUnitTest lintDebug assembleDebug --no-daemon \
+            "-PevReleaseName=$RELEASE_NAME" \
+            "-PevReleaseCode=$RELEASE_CODE"
+
+      - name: Prepare verifiable APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd app/build/outputs/apk/debug
+          mv app-debug.apk "EvidenceVault-${RELEASE_TAG}.apk"
+          sha256sum "EvidenceVault-${RELEASE_TAG}.apk" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish public beta prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/release-notes.txt <<'NOTES'
+          Automated EvidenceVault Android beta.
+
+          - Changes: this release corresponds exactly to its tagged commit on master.
+          - Verification: testDebugUnitTest, lintDebug and assembleDebug all passed.
+          - APK: DEBUG signed by the GitHub runner, not a stable release signing key.
+          - WARNING: debug-signature differences may prevent updating an earlier installation.
+            Uninstalling the previous app may permanently remove encrypted evidence and its
+            Android Keystore keys. Never uninstall before ensuring you can recover your data.
+          - On-device recording/security/Pulse tests are still required.
+          NOTES
+          gh release create "$RELEASE_TAG" \
+            "app/build/outputs/apk/debug/EvidenceVault-${RELEASE_TAG}.apk" \
+            app/build/outputs/apk/debug/SHA256SUMS \
+            --target "$GITHUB_SHA" \
+            --title "EvidenceVault $RELEASE_TAG (automatic beta)" \
+            --prerelease \
+            --notes-file /tmp/release-notes.txt

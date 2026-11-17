@@ -11,8 +11,10 @@ android {
         applicationId = "com.example.evidencevault"
         minSdk = 26
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2.1-beta.1"
+        // GitHub Actions injects a unique name/code for each published build.
+        // Local builds retain the base development version.
+        versionCode = providers.gradleProperty("evReleaseCode").orNull?.toIntOrNull() ?: 4
+        versionName = providers.gradleProperty("evReleaseName").orNull ?: "1.2.1-beta.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
