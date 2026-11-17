@@ -7,6 +7,7 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // Protect app startup: optional cleanup is best-effort and never blocks the UI.
         // Clean only stale plaintext files used for playback / Pulse credentials.
         // DO NOT purge cache/temp: a failed capture may still be recoverable there.
         Thread {
