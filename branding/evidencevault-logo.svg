@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>EvidenceVault</title>
+  <rect width="512" height="512" rx="112" fill="#0B1220"/>
+  <path d="M256 60 434 142v129c0 104-77 171-178 223C155 442 78 375 78 271V142Z" fill="none" stroke="#35D7E8" stroke-width="26" stroke-linejoin="round"/>
+  <g fill="none" stroke="#35D7E8" stroke-width="23" stroke-linecap="round">
+    <path d="M166 212v-29q0-19 19-19h30M297 164h30q19 0 19 19v29M346 290v29q0 19-19 19h-30M215 338h-30q-19 0-19-19v-29"/>
+    <circle cx="256" cy="251" r="73"/>
+    <path d="M215 243q10-38 45-39"/>
+  </g>
+  <circle cx="332" cy="193" r="20" fill="#FF596B"/>
+</svg>
