@@ -10,7 +10,7 @@ import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ImageButton
-import com.google.android.material.materialswitch.MaterialSwitch
+import androidx.appcompat.widget.SwitchCompat
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -30,8 +30,8 @@ import android.text.InputType
 class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
-    private lateinit var switchMic: MaterialSwitch
-    private lateinit var switchVideo: MaterialSwitch
+    private lateinit var switchMic: SwitchCompat
+    private lateinit var switchVideo: SwitchCompat
     private lateinit var btnRecord: ImageButton
     private lateinit var btnBackPreview: Button
     private lateinit var btnFrontPreview: Button
@@ -90,8 +90,14 @@ class MainActivity : AppCompatActivity() {
             if (!checked) switchMic.isChecked = true
         }
         updateRecordUi()
-        PulseScheduler.periodic(this)
-        PulseScheduler.once(this)
+        // Keep startup independent of optional upload scheduling and camera hardware.
+        // A failed optional component must not prevent access to existing evidence.
+        try {
+            PulseScheduler.periodic(this)
+            PulseScheduler.once(this)
+        } catch (t: Throwable) {
+            android.util.Log.e("EV_STARTUP", "Pulse scheduling unavailable", t)
+        }
         ensurePermissionsThenStartPreview()
     }
 
@@ -206,17 +212,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startPreview() {
-        val future = ProcessCameraProvider.getInstance(this)
-        future.addListener({
-            cameraProvider = future.get()
-            bindPreviewIfPossible()
-        }, ContextCompat.getMainExecutor(this))
+        try {
+            val future = ProcessCameraProvider.getInstance(this)
+            future.addListener({
+                try {
+                    cameraProvider = future.get()
+                    bindPreviewIfPossible()
+                } catch (t: Throwable) {
+                    android.util.Log.e("EV_CAMERA", "CameraX initialization failed", t)
+                    Toast.makeText(this, "Caméra indisponible. Le coffre reste accessible.", Toast.LENGTH_LONG).show()
+                }
+            }, ContextCompat.getMainExecutor(this))
+        } catch (t: Throwable) {
+            android.util.Log.e("EV_CAMERA", "CameraX unavailable", t)
+            Toast.makeText(this, "Caméra indisponible. Le coffre reste accessible.", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun bindPreviewIfPossible() {
         val provider = cameraProvider ?: return
         if (isRecording) return 
 
+        try {
         provider.unbindAll()
 
         val selector = when (currentFacing) {
@@ -228,10 +245,10 @@ class MainActivity : AppCompatActivity() {
             setSurfaceProvider(previewView.surfaceProvider)
         }
 
-        try {
             provider.bindToLifecycle(this, selector, preview)
         } catch (e: Exception) {
-            Toast.makeText(this, "Erreur preview: ${e.message}", Toast.LENGTH_SHORT).show()
+            android.util.Log.e("EV_CAMERA", "Preview binding failed", e)
+            Toast.makeText(this, "Prévisualisation indisponible", Toast.LENGTH_SHORT).show()
         }
     }
 
