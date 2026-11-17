@@ -8,8 +8,11 @@ import android.content.pm.ServiceInfo
 import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.IBinder
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.video.FileOutputOptions
 import androidx.camera.video.Quality
@@ -22,6 +25,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleService
 import com.example.evidencevault.crypto.CryptoVault
 import com.example.evidencevault.storage.IntegrityManifestRepo
+import com.example.evidencevault.pulse.PulseScheduler
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -36,6 +40,9 @@ class RecordingService : LifecycleService() {
         const val ACTION_START_VIDEO = "EV_START_VIDEO"
         const val ACTION_START_AUDIO = "EV_START_AUDIO"
         const val ACTION_STOP = "EV_STOP"
+        const val ACTION_FINISHED = "EV_CAPTURE_FINISHED"
+        @Volatile var captureActive = false
+            private set
 
         const val EXTRA_MIC_ENABLED = "mic_enabled"
         const val EXTRA_CAMERA_FACING = "camera_facing"
@@ -47,6 +54,9 @@ class RecordingService : LifecycleService() {
     private var activeRecording: Recording? = null
     private var tempFile: File? = null
     private var isVideo = false
+    private var videoInitializing = false
+    private var pendingStop = false
+    private var finalizing = false
 
     private val audioRecorder by lazy { AudioRecorder(this) }
 
@@ -60,12 +70,14 @@ class RecordingService : LifecycleService() {
         try {
             when (intent?.action) {
                 ACTION_START_VIDEO -> {
+                    captureActive = true
                     isVideo = true
                     val mic = intent.getBooleanExtra(EXTRA_MIC_ENABLED, true)
                     val facing = intent.getStringExtra(EXTRA_CAMERA_FACING) ?: "BACK"
                     startVideoRecording(mic, facing)
                 }
                 ACTION_START_AUDIO -> {
+                    captureActive = true
                     isVideo = false
                     startAudioRecording()
                 }
@@ -80,35 +92,64 @@ class RecordingService : LifecycleService() {
     }
 
     private fun startVideoRecording(micEnabled: Boolean, facing: String) {
-        if (activeRecording != null) return
-
-        startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this))
-
+        if (activeRecording != null || videoInitializing || finalizing) return
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            failBeforeCapture("Autorisation caméra absente.")
+            return
+        }
+        if (micEnabled && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            failBeforeCapture("Autorisation microphone absente.")
+            return
+        }
+        videoInitializing = true
+        pendingStop = false
+        val types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+            (if (micEnabled) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this), types)
+        } else startForeground(NotificationUtils.NOTIF_ID, NotificationUtils.buildRecordingNotification(this))
         val tmpDir = File(cacheDir, "temp").apply { mkdirs() }
-        tempFile = File(tmpDir, "video_tmp_${System.currentTimeMillis()}.mp4")
-
+        val output = File(tmpDir, "video_tmp_${java.util.UUID.randomUUID()}.mp4")
+        tempFile = output
         val future = ProcessCameraProvider.getInstance(this)
         future.addListener({
-            cameraProvider = future.get()
-            val selector = if (facing == "FRONT") CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
-            val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
-            videoCapture = VideoCapture.withOutput(recorder)
-            cameraProvider?.unbindAll()
-            cameraProvider?.bindToLifecycle(this, selector, videoCapture)
-
-            val out = FileOutputOptions.Builder(tempFile!!).build()
-            val pending = videoCapture!!.output.prepareRecording(this, out).apply {
-                if (micEnabled &&
-                    androidx.core.content.ContextCompat.checkSelfPermission(
-                        this@RecordingService, android.Manifest.permission.RECORD_AUDIO
-                    ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-                ) withAudioEnabled()
-            }
-
-            activeRecording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
-                if (event is VideoRecordEvent.Finalize) {
-                    if (event.hasError()) cleanupAfterStop() else tempFile?.let { onFileReadyToEncrypt(it) }
+            try {
+                val provider = future.get()
+                cameraProvider = provider
+                val selector = if (facing == "FRONT") CameraSelector.DEFAULT_FRONT_CAMERA else CameraSelector.DEFAULT_BACK_CAMERA
+                val recorder = Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD)).build()
+                val capture = VideoCapture.withOutput(recorder)
+                videoCapture = capture
+                val surface = RecordingPreviewBridge.get()
+                val preview = if (surface != null) Preview.Builder().build().apply {
+                    setSurfaceProvider(surface)
+                } else null
+                provider.unbindAll()
+                if (preview != null) provider.bindToLifecycle(this, selector, preview, capture)
+                else provider.bindToLifecycle(this, selector, capture)
+                val pending = capture.output.prepareRecording(this, FileOutputOptions.Builder(output).build()).apply {
+                    if (micEnabled) withAudioEnabled()
                 }
+                activeRecording = pending.start(ContextCompat.getMainExecutor(this)) { event ->
+                    if (event is VideoRecordEvent.Finalize) {
+                        activeRecording = null
+                        finalizing = true
+                        if (event.hasError()) {
+                            Log.e(TAG, "Finalisation vidéo impossible: ${event.error} / ${event.cause}")
+                            reportFailure("Capture vidéo échouée : temporaire conservé.")
+                            cleanupAfterStop()
+                        } else onFileReadyToEncrypt(output)
+                    }
+                }
+                videoInitializing = false
+                if (pendingStop) {
+                    pendingStop = false
+                    activeRecording?.stop()
+                }
+            } catch (e: Exception) {
+                videoInitializing = false
+                Log.e(TAG, "Échec lancement CameraX", e)
+                failBeforeCapture("Capture vidéo impossible : ${e.javaClass.simpleName}.")
             }
         }, ContextCompat.getMainExecutor(this))
     }
@@ -150,6 +191,8 @@ class RecordingService : LifecycleService() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         reportFailure(text)
         stopSelf()
+        captureActive = false
+        sendBroadcast(Intent(ACTION_FINISHED).setPackage(packageName))
     }
 
     private fun startAudioForeground() {
@@ -163,8 +206,8 @@ class RecordingService : LifecycleService() {
 
     private fun stopAnyRecording() {
         if (isVideo) {
-            activeRecording?.stop()
-            activeRecording = null
+            if (videoInitializing) pendingStop = true
+            else if (!finalizing) activeRecording?.stop()
         } else {
             stopAudioRecording()
         }
@@ -211,6 +254,7 @@ class RecordingService : LifecycleService() {
                 IntegrityManifestRepo.appendForEvidenceFile(this@RecordingService, outEnc)
                 // Suppression du temporaire seulement après un chiffrement et une entrée de manifeste réussis.
                 tmp.delete()
+                PulseScheduler.once(this@RecordingService)
             } catch (t: Throwable) {
                 Log.e(TAG, "Traitement du fichier échoué, temporaire conservé", t)
                 reportFailure("Échec du traitement de l'enregistrement (${t.javaClass.simpleName}). Fichier temporaire conservé, non importé.")
@@ -235,12 +279,22 @@ class RecordingService : LifecycleService() {
     }
 
     private fun cleanupAfterStop() {
-        cameraProvider?.unbindAll()
-        cameraProvider = null
-        videoCapture = null
-        tempFile = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
-        stopSelf()
+        // CameraX lifecycle operations must run on the main thread. Do not return
+        // preview ownership to MainActivity until the file has been finalized.
+        Handler(Looper.getMainLooper()).post {
+            cameraProvider?.unbindAll()
+            cameraProvider = null
+            videoCapture = null
+            activeRecording = null
+            tempFile = null
+            videoInitializing = false
+            pendingStop = false
+            finalizing = false
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            stopSelf()
+            captureActive = false
+            sendBroadcast(Intent(ACTION_FINISHED).setPackage(packageName))
+        }
     }
 
     override fun onDestroy() {

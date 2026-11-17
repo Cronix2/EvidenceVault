@@ -4,7 +4,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/item_background_rounded"
-    android:padding="16dp"
+    android:padding="18dp"
     android:layout_marginBottom="12dp">
 
     <!-- Partie supérieure, toujours visible -->
@@ -29,6 +29,17 @@
                 android:text="Titre de la preuve"
                 android:textColor="@android:color/white"
                 android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/itemType"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="AUDIO"
+                android:textSize="11sp"
+                android:letterSpacing="0.08"
+                android:textColor="#AEE8FC"
                 android:textStyle="bold" />
 
             <TextView

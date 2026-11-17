@@ -1,0 +1,18 @@
+services:
+  pulse:
+    build: .
+    restart: unless-stopped
+    environment:
+      PULSE_DATA_DIR: /data
+      PULSE_UPLOAD_TOKEN: ${PULSE_UPLOAD_TOKEN:?Create a random upload-only token in .env}
+    ports:
+      - "127.0.0.1:8767:8000"
+    volumes:
+      - pulse-data:/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  pulse-data:

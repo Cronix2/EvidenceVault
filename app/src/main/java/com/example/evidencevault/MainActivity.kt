@@ -2,12 +2,15 @@ package com.example.evidencevault
 
 import android.Manifest
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.widget.Button
 import android.widget.ImageButton
-import android.widget.Switch
+import com.google.android.material.materialswitch.MaterialSwitch
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -19,12 +22,16 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.evidencevault.domain.CameraFacing
 import com.example.evidencevault.recording.RecordingService
+import com.example.evidencevault.recording.RecordingPreviewBridge
+import com.example.evidencevault.pulse.PulseScheduler
+import android.widget.EditText
+import android.text.InputType
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
-    private lateinit var switchMic: Switch
-    private lateinit var switchVideo: Switch
+    private lateinit var switchMic: MaterialSwitch
+    private lateinit var switchVideo: MaterialSwitch
     private lateinit var btnRecord: ImageButton
     private lateinit var btnBackPreview: Button
     private lateinit var btnFrontPreview: Button
@@ -32,12 +39,22 @@ class MainActivity : AppCompatActivity() {
     private var cameraProvider: ProcessCameraProvider? = null
     private var currentFacing: CameraFacing = CameraFacing.BACK
     private var isRecording = false
+    private var isStopping = false
+    private val completedReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            isRecording = false
+            isStopping = false
+            updateRecordUi()
+            bindPreviewIfPossible()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
         previewView = findViewById(R.id.previewView)
+        RecordingPreviewBridge.set(previewView.surfaceProvider)
         switchMic = findViewById(R.id.switchMic)
         switchVideo = findViewById(R.id.switchVideo)
         btnRecord = findViewById(R.id.btnRecord)
@@ -46,6 +63,9 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<ImageButton>(R.id.btnVault).setOnClickListener {
             startActivity(Intent(this, VaultActivity::class.java))
+        }
+        findViewById<ImageButton>(R.id.btnSettings).setOnClickListener {
+            SecuritySettings.show(this, isRecording || isStopping)
         }
 
         btnBackPreview.setOnClickListener {
@@ -60,8 +80,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnRecord.setOnClickListener {
-            if (!isRecording) startCapture()
-            else stopCapture()
+            if (isStopping) return@setOnClickListener
+            if (!isRecording) startCapture() else stopCapture()
         }
 
         switchVideo.setOnCheckedChangeListener { _, checked ->
@@ -70,6 +90,8 @@ class MainActivity : AppCompatActivity() {
             if (!checked) switchMic.isChecked = true
         }
         updateRecordUi()
+        PulseScheduler.periodic(this)
+        PulseScheduler.once(this)
         ensurePermissionsThenStartPreview()
     }
 
@@ -114,6 +136,73 @@ class MainActivity : AppCompatActivity() {
             }
             .setNegativeButton("Annuler", null)
             .show()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        ContextCompat.registerReceiver(
+            this, completedReceiver, IntentFilter(RecordingService.ACTION_FINISHED),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+    }
+
+    override fun onStop() {
+        super.onStop()
+        unregisterReceiver(completedReceiver)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        isRecording = RecordingService.captureActive
+        isStopping = false
+        if (::previewView.isInitialized) {
+            RecordingPreviewBridge.set(previewView.surfaceProvider)
+            updateRecordUi()
+            if (!isRecording && cameraProvider != null) bindPreviewIfPossible()
+        }
+    }
+
+    override fun onDestroy() {
+        RecordingPreviewBridge.clear()
+        super.onDestroy()
+    }
+
+    private fun configureVaultPin() {
+        fun chooseNewPin() {
+            val field = EditText(this).apply {
+                inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+                hint = "6 à 12 chiffres"
+            }
+            androidx.appcompat.app.AlertDialog.Builder(this)
+                .setTitle("PIN du coffre")
+                .setMessage("Ce code protège l'ouverture de la galerie. Il ne remplace pas le chiffrement du coffre.")
+                .setView(field)
+                .setNegativeButton("Annuler", null)
+                .setPositiveButton("Enregistrer") { _, _ ->
+                    val pin = field.text.toString()
+                    if (pin.length in 6..12 && pin.all(Char::isDigit)) {
+                        VaultPin.set(this, pin)
+                        Toast.makeText(this, "PIN enregistré", Toast.LENGTH_SHORT).show()
+                    } else Toast.makeText(this, "PIN invalide : 6 à 12 chiffres", Toast.LENGTH_LONG).show()
+                }
+                .show()
+        }
+        if (!VaultPin.configured(this)) {
+            chooseNewPin()
+            return
+        }
+        val field = EditText(this).apply {
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_VARIATION_PASSWORD
+            hint = "Code actuel"
+        }
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Changer le PIN")
+            .setView(field)
+            .setNegativeButton("Annuler", null)
+            .setPositiveButton("Continuer") { _, _ ->
+                if (VaultPin.verify(this, field.text.toString())) chooseNewPin()
+                else Toast.makeText(this, "PIN incorrect", Toast.LENGTH_LONG).show()
+            }.show()
     }
 
     private fun startPreview() {
@@ -165,7 +254,13 @@ class MainActivity : AppCompatActivity() {
             putExtra(RecordingService.EXTRA_CAMERA_FACING, facing)
         }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(i) else startService(i)
+        } catch (e: Exception) {
+            bindPreviewIfPossible()
+            Toast.makeText(this, "Impossible de démarrer : ${e.message}", Toast.LENGTH_LONG).show()
+            return
+        }
 
         isRecording = true
         updateRecordUi()
@@ -173,23 +268,29 @@ class MainActivity : AppCompatActivity() {
 
     private fun updateRecordUi() {
         btnRecord.setImageResource(if (isRecording) R.drawable.ic_stop else R.drawable.ic_record)
+        btnRecord.isEnabled = !isStopping
         btnRecord.contentDescription = if (isRecording) "Arrêter l'enregistrement" else "Démarrer l'enregistrement"
         btnBackPreview.isEnabled = !isRecording
         btnFrontPreview.isEnabled = !isRecording
         switchVideo.isEnabled = !isRecording
         switchMic.isEnabled = !isRecording && switchVideo.isChecked
         findViewById<android.widget.TextView>(R.id.recordStatus).text =
-            if (isRecording) "ENREGISTREMENT EN COURS" else "PRÊT À ENREGISTRER"
+            if (isStopping) "FINALISATION EN COURS…" else if (isRecording) "ENREGISTREMENT EN COURS" else "PRÊT À ENREGISTRER"
     }
 
     private fun stopCapture() {
         val i = Intent(this, RecordingService::class.java).apply {
             action = RecordingService.ACTION_STOP
         }
-        startService(i)
+        try {
+            startService(i)
+        } catch (e: Exception) {
+            Toast.makeText(this, "Impossible d'arrêter : ${e.message}", Toast.LENGTH_LONG).show()
+            return
+        }
 
-        isRecording = false
+        isStopping = true
         updateRecordUi()
-        bindPreviewIfPossible()
+        // Service announces completion after finalizing the encrypted evidence.
     }
 }

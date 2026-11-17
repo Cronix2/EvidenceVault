@@ -14,6 +14,17 @@
 - Lecture des preuves **audio** depuis le coffre ; **lecture vidéo non encore implémentée dans le coffre**.
 - Export ZIP de preuves **chiffrées** accompagnées du manifeste d'intégrité chiffré et d'instructions ; ce n'est **pas** un export lisible hors de l'application.
 
+## Nouveautés de la version en développement (non publiée)
+
+La branche de développement propose une interface de capture épurée, la reprise de l'aperçu CameraX pendant l'enregistrement, la gestion des arrêts vidéo avant initialisation et la lecture des vidéos chiffrées dans le coffre.
+
+- **Coffre protégé** par PIN facultatif (6–12 chiffres) ou biométrie forte Android ; la biométrie ne fournit **pas** l'identité du doigt utilisé.
+- **Effacement local** avec un second PIN et une double confirmation ; invalidation de la clé Keystore et suppression au mieux du coffre local. Il n'existe aucune garantie « sans trace » et les sauvegardes/exportations/copies distantes ne sont pas effacées.
+- **Pulse** : sauvegarde réseau des fichiers chiffrés avec transfert HTTPS et réception en ajout uniquement. Activation manuelle et serveur à configurer ; voir [le guide Pulse](docs/PULSE.md). Le serveur de référence est fourni dans `pulse-server/` mais n'est pas déployé.
+- Les preuves vidéo ne sont **pas** automatiquement visibles dans l'application Fichiers d'Android : le coffre est dans le stockage privé chiffré de l'application. La galerie EvidenceVault et l'export ZIP donnent accès à ces preuves.
+
+Ces changements sont **en cours de validation dans une PR en brouillon**, pas dans la release publique `v1.1.0-beta.1`.
+
 ## Installation / utilisation
 
 1. Consultez [Releases](https://github.com/Cronix2/EvidenceVault/releases) et téléchargez l'APK de la version souhaitée.
